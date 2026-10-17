@@ -105,7 +105,7 @@ input[type=range]{accent-color:var(--acc);width:130px}
 <symbol id="i-del" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></symbol>
 </defs></svg>
 <header class="top">
-  <div class="brand"><span class="mark"></span>Éditeur PDF<small style="font-weight:500;color:var(--mute);font-size:.7rem">v13 · polices</small></div>
+  <div class="brand"><span class="mark"></span>Éditeur PDF<small style="font-weight:500;color:var(--mute);font-size:.7rem">v15 · courier</small></div>
   <button id="undo" class="ib" disabled aria-label="Annuler"><svg class="i"><use href="#i-undo"/></svg></button>
   <button id="redo" class="ib" disabled aria-label="Rétablir"><svg class="i"><use href="#i-redo"/></svg></button>
   <button id="save" class="ib" disabled aria-label="Télécharger le PDF"><svg class="i"><use href="#i-dl"/></svg></button>
@@ -232,7 +232,8 @@ async function bestByWidth(f,l){
   return best;
 }
 // Polices courantes disponibles en ligne : on reprend la vraie police (ou son équivalent exact) au lieu d'une police proche.
-const WEB=[[/^calibri/,'carlito','Carlito, équivalent exact de Calibri'],[/^cambria(?!math)/,'caladea','Caladea, équivalent exact de Cambria'],[/^roboto(?!mono|slab|condensed)/,'roboto','Roboto'],[/^opensans/,'open-sans','Open Sans'],[/^lato/,'lato','Lato'],[/^montserrat/,'montserrat','Montserrat'],[/^poppins/,'poppins','Poppins'],[/^sourcesans/,'source-sans-3','Source Sans'],[/^merriweather/,'merriweather','Merriweather'],[/^playfairdisplay/,'playfair-display','Playfair Display'],[/^ptserif/,'pt-serif','PT Serif'],[/^raleway/,'raleway','Raleway'],[/^nunito/,'nunito','Nunito'],[/^ubuntu(?!mono)/,'ubuntu','Ubuntu'],[/^inter(regular|bold|medium|semibold|light|italic|$)/,'inter','Inter']];
+const WEB=[[/^couriernew/,'courier-prime','Courier Prime, proche de Courier New'],[/^calibri/,'carlito','Carlito, équivalent exact de Calibri'],[/^cambria(?!math)/,'caladea','Caladea, équivalent exact de Cambria'],[/^roboto(?!mono|slab|condensed)/,'roboto','Roboto'],[/^opensans/,'open-sans','Open Sans'],[/^lato/,'lato','Lato'],[/^montserrat/,'montserrat','Montserrat'],[/^poppins/,'poppins','Poppins'],[/^sourcesans/,'source-sans-3','Source Sans'],[/^merriweather/,'merriweather','Merriweather'],[/^playfairdisplay/,'playfair-display','Playfair Display'],[/^ptserif/,'pt-serif','PT Serif'],[/^raleway/,'raleway','Raleway'],[/^nunito/,'nunito','Nunito'],[/^ubuntu(?!mono)/,'ubuntu','Ubuntu'],[/^inter(regular|bold|medium|semibold|light|italic|$)/,'inter','Inter']];
+const WEBALT={'courier-prime':[['cousine','Cousine (mêmes largeurs, sans empattement)'],['cutive-mono','Cutive Mono (machine à écrire fine)']]};
 function webFamily(name){
   const n=(name||'').toLowerCase().replace(/^[a-z]{6}\+/,'').replace(/[^a-z0-9]/g,'');
   for(const[re,id,label]of WEB)if(re.test(n))return{id,label};
@@ -309,9 +310,10 @@ function setInfo(){
   $('info').textContent=sel.add?'Nouveau texte':'Police d’origine : '+(sel.real&&!/^g_d/.test(sel.real)?sel.real:'inconnue')+' · '+Math.round(sel.size*10)/10+' pt'+(sel.web?'':' · remplacée par : '+sel.fontLabel);
 }
 function syncWebOption(){
-  let wo=[...$('fnt').options].find(o=>o.value==='web');
-  if(sel&&sel.web){if(!wo){wo=document.createElement('option');wo.value='web';$('fnt').insertBefore(wo,$('fnt').firstChild)}wo.textContent='Police : '+sel.web.label}
-  else if(wo)wo.remove();
+  [...$('fnt').options].filter(o=>o.value==='web'||o.value.startsWith('web:')).forEach(o=>o.remove());
+  if(!(sel&&sel.web))return;
+  const list=[['web','Police : '+sel.web.label],...(WEBALT[sel.web.id]||[]).map(([id,lb])=>['web:'+id,'Police : '+lb])];
+  list.reverse().forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;$('fnt').insertBefore(o,$('fnt').firstChild)});
 }
 // Pour une police absente de la liste : on devine son nom en ligne et on vérifie qu'elle existe.
 function guessId(name){
@@ -355,8 +357,8 @@ async function apply(){
       const page=pdf.getPages()[pageNo-1];
       let font;
       if(fk==='custom'){pdf.registerFontkit(fontkit);font=await pdf.embedFont(customFont.bytes)}
-      else if(fk==='web'){
-        const wb=await webFontBytes(sel.web,sel.bold,sel.ital);
+      else if(fk==='web'||fk.startsWith('web:')){
+        const wb=await webFontBytes(fk==='web'?sel.web:{id:fk.slice(4)},sel.bold,sel.ital);
         if(wb){pdf.registerFontkit(fontkit);font=await pdf.embedFont(wb,{subset:true})}
         else{toast('Police exacte indisponible (connexion ?) : police proche utilisée.');font=await pdf.embedFont(PDFLib.StandardFonts[sel.key])}
       }else font=await pdf.embedFont(PDFLib.StandardFonts[fk]);
