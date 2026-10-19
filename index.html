@@ -105,7 +105,7 @@ input[type=range]{accent-color:var(--acc);width:130px}
 <symbol id="i-del" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></symbol>
 </defs></svg>
 <header class="top">
-  <div class="brand"><span class="mark"></span>Éditeur PDF<small style="font-weight:500;color:var(--mute);font-size:.7rem">v16 · mémoire</small></div>
+  <div class="brand"><span class="mark"></span>Éditeur PDF<small style="font-weight:500;color:var(--mute);font-size:.7rem">v17 · texte libre</small></div>
   <button id="undo" class="ib" disabled aria-label="Annuler"><svg class="i"><use href="#i-undo"/></svg></button>
   <button id="redo" class="ib" disabled aria-label="Rétablir"><svg class="i"><use href="#i-redo"/></svg></button>
   <button id="save" class="ib" disabled aria-label="Télécharger le PDF"><svg class="i"><use href="#i-dl"/></svg></button>
@@ -305,10 +305,10 @@ function showPanel(){
   $('more').style.display=sel.add?'none':'';
   $('panel').style.display='block';$('txt').focus();
   autoPick();
-  if(!sel.add)probeWeb(sel);
+  probeWeb(sel);
 }
 function setInfo(){
-  $('info').textContent=sel.add?'Nouveau texte':'Police d’origine : '+(sel.real&&!/^g_d/.test(sel.real)?sel.real:'inconnue')+' · '+Math.round(sel.size*10)/10+' pt'+(sel.web?'':' · remplacée par : '+sel.fontLabel);
+  $('info').textContent=sel.add?'Nouveau texte'+(normName(sel.real)?' · police du texte voisin : '+sel.real:''):'Police d’origine : '+(sel.real&&!/^g_d/.test(sel.real)?sel.real:'inconnue')+' · '+Math.round(sel.size*10)/10+' pt'+(sel.web?'':' · remplacée par : '+sel.fontLabel);
 }
 function syncWebOption(){
   [...$('fnt').options].filter(o=>o.value==='web'||o.value.startsWith('web:')).forEach(o=>o.remove());
@@ -346,7 +346,7 @@ function saveChoice(fk,k){
   }catch(e){}
 }
 function autoPick(){
-  if(!sel||sel.add)return;
+  if(!sel)return;
   try{
     const k=normName(sel.real);if(!k)return;
     const cf=localStorage.getItem('cf:'+k);
@@ -420,14 +420,21 @@ $('ffile').onchange=async e=>{
   if(!o){o=document.createElement('option');o.value='custom';$('fnt').appendChild(o)}
   o.textContent='Police : '+f.name;$('fnt').value='custom';
 };
-$('addt').onclick=()=>{addMode=!addMode;$('addt').classList.toggle('main',addMode);toast(addMode?'Touchez la page à l’endroit du texte.':'Ajout annulé.')};
+$('addt').onclick=()=>{if(mode)setMode(mode);addMode=!addMode;$('addt').classList.toggle('main',addMode);toast(addMode?'Touchez la page à l’endroit du texte.':'Ajout annulé.')};
 $('layer').addEventListener('click',e=>{
   if(pendingImg){placeImage(e);return}
-  if(!addMode)return;
-  const r=$('layer').getBoundingClientRect(),[x,y]=curVp.convertToPdfPoint(e.clientX-r.left,e.clientY-r.top);
+  const free=!addMode&&!mode&&e.target===$('layer');   // simple appui sur un espace vide de la page
+  if(!addMode&&!free)return;
+  const r=$('layer').getBoundingClientRect(),[x,py]=curVp.convertToPdfPoint(e.clientX-r.left,e.clientY-r.top);
   addMode=false;$('addt').classList.remove('main');
   document.querySelectorAll('.t.on').forEach(el=>el.classList.remove('on'));
-  sel={add:true,x,y,w:0,size:12,key:'Helvetica',color:[0,0,0],bg:[255,255,255],s:''};sel.group=[sel];showPanel();
+  // le nouveau texte reprend la police, la taille et la couleur de la ligne voisine, et s'aligne dessus
+  let ref=null,best=1e9,y=py-3;
+  for(const l of lines){const dy=Math.abs(l.y-py);if(dy<l.size*1.3&&dy<best){best=dy;ref=l}}
+  if(ref&&best<ref.size*0.7)y=ref.y;
+  sel={add:true,x,y,w:0,size:ref?ref.size:12,key:ref?ref.key:'Helvetica',color:ref?ref.color:[0,0,0],bg:[255,255,255],s:'',
+    real:ref&&ref.real,web:ref&&ref.web,bold:ref&&ref.bold,ital:ref&&ref.ital,fontLabel:ref&&ref.fontLabel};
+  sel.group=[sel];showPanel();
 });
 
 const tool=(id,fn)=>$(id).onclick=async()=>{if(!doc||busy)return;busy=true;try{await fn()}catch(e){toast('Action impossible : '+(e.message||e))}busy=false};
@@ -457,7 +464,7 @@ let mode=null,pendingImg=null;
 const run=async f=>{if(busy)return;busy=true;try{await f()}catch(e){toast('Action impossible : '+(e.message||e))}busy=false};
 const rgbOf=h=>{const c=unhex(h);return PDFLib.rgb(c[0]/255,c[1]/255,c[2]/255)};
 function setMode(m){
-  mode=mode===m?null:m;document.body.dataset.mode=mode||'';
+  mode=mode===m?null:m;addMode=false;$('addt').classList.remove('main');document.body.dataset.mode=mode||'';
   if(mode==='box')toast('Faites glisser pour tracer un cadre, ou touchez une ligne de texte.');
   if(mode==='ctr')toast('Dessinez une boucle autour de la zone, puis choisissez l’action.');
   $('hl').classList.toggle('main',mode==='hl');$('pen').classList.toggle('main',mode==='pen');$('er').classList.toggle('main',mode==='erase');$('box').classList.toggle('main',mode==='box');$('ctr').classList.toggle('main',mode==='ctr');
