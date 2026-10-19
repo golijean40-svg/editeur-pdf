@@ -38,6 +38,7 @@ canvas{display:block}
 #pc{position:absolute;left:0;top:0;pointer-events:none;touch-action:none;background:transparent;box-shadow:none}
 .t{position:absolute;cursor:pointer;border-radius:3px;box-shadow:inset 0 -2px 0 var(--hintline)}
 .t:hover{background:var(--hint)}
+.ob{position:absolute;touch-action:none;cursor:grab;border-radius:3px;outline:1px dashed var(--hintline)}
 .t.on{background:var(--sel);box-shadow:none;outline:2px solid var(--acc)}
 #dockwrap{position:fixed;left:0;right:0;bottom:0;z-index:15;display:flex;flex-direction:column;align-items:center;gap:8px;padding:0 8px calc(8px + env(safe-area-inset-bottom));pointer-events:none}
 #dockwrap>*{pointer-events:auto}
@@ -48,10 +49,11 @@ body:not(.ready) #dockwrap{display:none}
 #nav button:active{background:var(--hint)}
 #pg,#zv{min-width:58px;text-align:center;font-size:.84rem;font-weight:600;font-variant-numeric:tabular-nums}
 .vr{width:1px;height:20px;background:var(--line);margin:0 4px}
-#opts{display:none;align-items:center;gap:14px;padding:8px 16px;border-radius:999px;font-size:.84rem;color:var(--mute)}
+#opts{display:none;align-items:center;gap:14px;padding:8px 16px;border-radius:22px;flex-wrap:wrap;justify-content:center;max-width:calc(100% - 8px);font-size:.84rem;color:var(--mute)}
 body[data-mode=hl] #opts,body[data-mode=pen] #opts,body[data-mode=erase] #opts,body[data-mode=box] #opts,body[data-mode=ctr] #opts{display:flex}
 .o{display:none;align-items:center;gap:10px}
-body[data-mode=hl] .o-hl,body[data-mode=pen] .o-pen,body[data-mode=erase] .o-er,body[data-mode=box] .o-box,body[data-mode=ctr] .o-box{display:flex}
+body[data-mode=hl] .o-hl,body[data-mode=pen] .o-pen,body[data-mode=erase] .o-er,body[data-mode=box] .o-box,body[data-mode=ctr] .o-box,body[data-mode=ctr] .o-ctr{display:flex}
+#shape{height:34px;border:1px solid var(--line);border-radius:10px;background:var(--surf);color:var(--ink);font:inherit;font-size:.85rem;padding:0 8px}
 input[type=color]{-webkit-appearance:none;appearance:none;width:32px;height:32px;padding:0;border:2px solid var(--line);border-radius:50%;background:none;overflow:hidden;cursor:pointer}
 input[type=color]::-webkit-color-swatch-wrapper{padding:0}
 input[type=color]::-webkit-color-swatch{border:0;border-radius:50%}
@@ -105,7 +107,7 @@ input[type=range]{accent-color:var(--acc);width:130px}
 <symbol id="i-del" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></symbol>
 </defs></svg>
 <header class="top">
-  <div class="brand"><span class="mark"></span>Éditeur PDF<small style="font-weight:500;color:var(--mute);font-size:.7rem">v17 · texte libre</small></div>
+  <div class="brand"><span class="mark"></span>Éditeur PDF<small style="font-weight:500;color:var(--mute);font-size:.7rem">v19 · formes</small></div>
   <button id="undo" class="ib" disabled aria-label="Annuler"><svg class="i"><use href="#i-undo"/></svg></button>
   <button id="redo" class="ib" disabled aria-label="Rétablir"><svg class="i"><use href="#i-redo"/></svg></button>
   <button id="save" class="ib" disabled aria-label="Télécharger le PDF"><svg class="i"><use href="#i-dl"/></svg></button>
@@ -123,6 +125,7 @@ input[type=range]{accent-color:var(--acc);width:130px}
   <div id="opts">
     <div class="o o-hl"><span>Surligneur</span><input id="hlc" type="color" value="#ffe600" aria-label="Couleur du surligneur"></div>
     <div class="o o-pen"><span>Stylo</span><input id="penc" type="color" value="#d92d20" aria-label="Couleur du stylo"></div>
+    <div class="o o-ctr"><span>Forme</span><select id="shape" aria-label="Forme du contour"><option value="free">Libre</option><option value="rect">Rectangle</option><option value="round">Rectangle arrondi</option><option value="ellipse">Ovale</option><option value="diamond">Losange</option><option value="triangle">Triangle</option><option value="star">Étoile</option><option value="arrow">Flèche</option></select></div>
     <div class="o o-box"><span>Cadre</span><input id="boxc" type="color" value="#2447f9" aria-label="Couleur du cadre"><input id="boxw" type="range" min="1" max="6" step="0.5" value="2" aria-label="Épaisseur du cadre"></div>
     <div class="o o-er"><span>Taille</span><input id="brs" type="range" min="4" max="60" value="14" aria-label="Taille de la gomme"></div>
   </div>
@@ -152,14 +155,14 @@ input[type=range]{accent-color:var(--acc);width:130px}
   <div id="info"></div>
   <input id="txt" autocomplete="off" aria-label="Nouveau texte">
   <div class="row"><select id="fnt" aria-label="Police"></select><input id="sz" type="number" min="4" max="200" step="0.5" aria-label="Taille du texte"><input id="col" type="color" aria-label="Couleur du texte"></div>
-  <div class="row"><button id="more" class="btn2">Ligne suivante</button><label class="btn2">Ma police<input id="ffile" type="file" accept=".ttf,.otf" hidden></label></div>
-  <div class="row"><button id="cancel" class="btn2">Fermer</button><button id="apply" class="btn2 main">Appliquer</button></div>
+  <div class="row"><button id="more" class="btn2">Ligne suivante</button><label class="btn2">Mes polices<input id="ffile" type="file" accept=".ttf,.otf" multiple hidden></label></div>
+  <div class="row"><button id="cancel" class="btn2">Fermer</button><button id="delobj" class="btn2" hidden style="color:var(--danger)">Supprimer</button><button id="apply" class="btn2 main">Appliquer</button></div>
 </div></div>
 <div id="msg" role="status"></div>
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const $=id=>document.getElementById(id);
-let customFont=null,curVp,addMode=false,zoom=1,bytes=null,history=[],redo=[],doc=null,pageNo=1,scale=1,sel=null,lines=[],busy=false;
+let customFont=null,curVp,addMode=false,zoom=1,bytes=null,base=null,objs=[],history=[],redo=[],doc=null,pageNo=1,scale=1,sel=null,lines=[],busy=false;
 const FONTS=[['Helvetica','Sans-serif'],['HelveticaBold','Sans-serif gras'],['HelveticaOblique','Sans-serif italique'],['HelveticaBoldOblique','Sans-serif gras italique'],['TimesRoman','Serif'],['TimesRomanBold','Serif gras'],['TimesRomanItalic','Serif italique'],['TimesRomanBoldItalic','Serif gras italique'],['Courier','Machine à écrire'],['CourierBold','Machine à écrire gras'],['CourierOblique','Machine à écrire italique'],['CourierBoldOblique','Machine à écrire gras italique']];
 FONTS.forEach(([k,n])=>{const o=document.createElement('option');o.value=k;o.textContent='Police : '+n;$('fnt').appendChild(o)});
 const cv=$('cv'),ctx=cv.getContext('2d',{willReadFrequently:true});
@@ -196,6 +199,7 @@ async function render(){
     d.style.cssText=`left:${l.cx}px;top:${l.cy}px;width:${l.cw}px;height:${l.ch}px`;
     d.onclick=()=>{if(addMode||pendingImg)return;if(mode==='hl')run(()=>highlight(l));else if(!mode)choose(l,d)};L.appendChild(d);l.el=d;
   });
+  drawObjOverlays(L,vp);
 }
 
 const STD={Helvetica:['Helvetica','HelveticaBold','HelveticaOblique','HelveticaBoldOblique'],Times:['TimesRoman','TimesRomanBold','TimesRomanItalic','TimesRomanBoldItalic'],Courier:['Courier','CourierBold','CourierOblique','CourierBoldOblique']};
@@ -302,13 +306,13 @@ function showPanel(){
   syncWebOption();
   $('fnt').value=sel.web?'web':sel.key;$('sz').value=Math.round(sel.size*10)/10;$('col').value=hex(sel.color);
   setInfo();
-  $('more').style.display=sel.add?'none':'';
+  $('more').style.display=sel.add?'none':'';$('delobj').hidden=!sel.objId;
   $('panel').style.display='block';$('txt').focus();
   autoPick();
   probeWeb(sel);
 }
 function setInfo(){
-  $('info').textContent=sel.add?'Nouveau texte'+(normName(sel.real)?' · police du texte voisin : '+sel.real:''):'Police d’origine : '+(sel.real&&!/^g_d/.test(sel.real)?sel.real:'inconnue')+' · '+Math.round(sel.size*10)/10+' pt'+(sel.web?'':' · remplacée par : '+sel.fontLabel);
+  $('info').textContent=sel.objId?'Texte ajouté · glissez-le sur la page pour le déplacer':sel.add?'Nouveau texte'+(normName(sel.real)?' · police du texte voisin : '+sel.real:''):'Police d’origine : '+(sel.real&&!/^g_d/.test(sel.real)?sel.real:'inconnue')+' · '+Math.round(sel.size*10)/10+' pt'+(sel.web?'':' · remplacée par : '+sel.fontLabel);
 }
 function syncWebOption(){
   [...$('fnt').options].filter(o=>o.value==='web'||o.value.startsWith('web:')).forEach(o=>o.remove());
@@ -366,25 +370,103 @@ function choose(l,el){
 }
 function closePanel(){hideC();$('panel').style.display='none';sel=null;document.querySelectorAll('.t.on').forEach(e=>e.classList.remove('on'))}
 
-async function mutate(fn){
-  const pdf=await PDFLib.PDFDocument.load(bytes,{ignoreEncryption:true});
-  await fn(pdf);
-  const out=await pdf.save();
-  history.push(bytes);redo=[];
+// Les textes ajoutés restent des objets (déplaçables, modifiables) tant qu'ils ne sont pas téléchargés ;
+// le PDF affiché = PDF de base + ces objets dessinés dessus.
+async function bake(b,list){
+  if(!list.length)return b;
+  const pdf=await PDFLib.PDFDocument.load(b,{ignoreEncryption:true}),cache=new Map();
+  for(const o of list){
+    const pg=pdf.getPages()[o.page];if(!pg)continue;
+    const key=o.fontBytes?'b'+o.fsel+o.fontBytes.length:o.fk;
+    let font=cache.get(key);
+    if(!font){
+      if(o.fontBytes){pdf.registerFontkit(fontkit);font=await pdf.embedFont(o.fontBytes,{subset:true})}
+      else font=await pdf.embedFont(PDFLib.StandardFonts[o.fk]);
+      cache.set(key,font);
+    }
+    pg.drawText(o.text,{x:o.x,y:o.y,size:o.size,font,color:PDFLib.rgb(o.color[0]/255,o.color[1]/255,o.color[2]/255)});
+    o.w=font.widthOfTextAtSize(o.text,o.size);
+  }
+  return await pdf.save();
+}
+async function commit(nb,no){
+  const out=await bake(nb,no);   // peut échouer (caractère non pris en charge) avant de toucher à l'état
+  history.push({base,objs});redo=[];
+  base=nb;objs=no;
   await load(out,true);
 }
+async function mutate(fn,remap){
+  const pdf=await PDFLib.PDFDocument.load(base,{ignoreEncryption:true});
+  await fn(pdf);
+  const nb=await pdf.save();
+  await commit(nb,remap?remap(objs):objs);
+}
+async function applyObject(text,size,color,fk,realKey){
+  const old=sel.objId,b0={x:sel.x,y:sel.y,real:sel.real,web:sel.web,bold:sel.bold,ital:sel.ital,fontLabel:sel.fontLabel,std:sel.key||'Helvetica'};
+  if(!text.trim()){if(old)await commit(base,objs.filter(q=>q.id!==old));else closePanel();return}
+  let fb=null,std=b0.std;
+  if(fk==='custom')fb=customFont?customFont.bytes:null;
+  else if(fk==='web'||fk.startsWith('web:')){
+    fb=await webFontBytes(fk==='web'?b0.web:{id:fk.slice(4)},b0.bold,b0.ital);
+    if(!fb)toast('Police exacte indisponible (connexion ?) : police proche utilisée.');
+  }else std=fk;
+  const o={id:old||'o'+Date.now(),page:pageNo-1,x:b0.x,y:b0.y,text,size,color,fk:std,fsel:fk,fontBytes:fb||null,w:0,real:b0.real,web:b0.web,bold:b0.bold,ital:b0.ital,fontLabel:b0.fontLabel};
+  const no=old?objs.map(q=>q.id===old?o:q):[...objs,o];
+  saveChoice(fk,realKey);
+  await commit(base,no);
+}
+function openObj(o){
+  sel={add:true,objId:o.id,x:o.x,y:o.y,w:o.w,size:o.size,key:o.fk,color:o.color,bg:[255,255,255],s:o.text,real:o.real,web:o.web,bold:o.bold,ital:o.ital,fontLabel:o.fontLabel};
+  sel.group=[sel];
+  document.querySelectorAll('.t.on').forEach(e=>e.classList.remove('on'));
+  showPanel();
+  if(o.fsel==='custom'&&o.fontBytes){
+    customFont={bytes:o.fontBytes};
+    let c=[...$('fnt').options].find(x=>x.value==='custom');
+    if(!c){c=document.createElement('option');c.value='custom';$('fnt').appendChild(c)}
+    c.textContent='Police du texte';
+  }
+  if([...$('fnt').options].some(x=>x.value===o.fsel))$('fnt').value=o.fsel;
+}
+function drawObjOverlays(L,vp){
+  objs.filter(o=>o.page===pageNo-1).forEach(o=>{
+    const[px,py]=vp.convertToViewportPoint(o.x,o.y),h=o.size*scale*1.25,d=document.createElement('div');
+    d.className='ob';
+    d.style.cssText='left:'+(px-2)+'px;top:'+(py-o.size*scale*.92)+'px;width:'+(Math.max(o.w*scale,16)+4)+'px;height:'+h+'px';
+    let st=null;
+    d.addEventListener('pointerdown',e=>{if(mode||addMode||pendingImg)return;st={x:e.clientX,y:e.clientY,m:false};d.setPointerCapture(e.pointerId);e.stopPropagation()});
+    d.addEventListener('pointermove',e=>{
+      if(!st)return;const dx=e.clientX-st.x,dy=e.clientY-st.y;
+      if(Math.hypot(dx,dy)>6)st.m=true;
+      if(st.m)d.style.transform='translate('+dx+'px,'+dy+'px)';
+    });
+    d.addEventListener('pointerup',e=>{
+      if(!st)return;const dx=e.clientX-st.x,dy=e.clientY-st.y,moved=st.m;st=null;
+      if(!moved){openObj(o);return}
+      const[nx,ny]=curVp.convertToPdfPoint(px+dx,py+dy);
+      run(()=>commit(base,objs.map(q=>q.id===o.id?{...q,x:nx,y:ny}:q)));
+    });
+    L.appendChild(d);
+  });
+}
+$('delobj').onclick=()=>{if(sel&&sel.objId){const id=sel.objId;run(()=>commit(base,objs.filter(q=>q.id!==id)))}};
 
 async function apply(){
   if(!sel||busy)return;
   busy=true;
   const realKey=normName(sel.real);
   const text=$('txt').value,size=parseFloat($('sz').value)||sel.size,color=unhex($('col').value),fk=$('fnt').value;
+  if(sel.add){
+    try{await applyObject(text,size,color,fk,realKey)}
+    catch(e){console.error(e);toast(/WinAnsi|encode/i.test(String(e.message))?'Un caractère n’est pas pris en charge par cette police : chargez « Mes polices ».':'Modification impossible : '+(e.message||e))}
+    busy=false;return;
+  }
   try{
     let tooLong=false;
     await mutate(async pdf=>{
       const page=pdf.getPages()[pageNo-1];
       let font;
-      if(fk==='custom'){pdf.registerFontkit(fontkit);font=await pdf.embedFont(customFont.bytes)}
+      if(fk==='custom'){pdf.registerFontkit(fontkit);font=await pdf.embedFont(customFont.bytes,{subset:true})}
       else if(fk==='web'||fk.startsWith('web:')){
         const wb=await webFontBytes(fk==='web'?sel.web:{id:fk.slice(4)},sel.bold,sel.ital);
         if(wb){pdf.registerFontkit(fontkit);font=await pdf.embedFont(wb,{subset:true})}
@@ -403,7 +485,7 @@ async function apply(){
     });
     saveChoice(fk,realKey);
     if(tooLong)toast('Le nouveau texte est plus long que l’original : vérifiez qu’il ne recouvre rien.');
-  }catch(e){console.error(e);toast(/WinAnsi|encode/i.test(String(e.message))?'Un caractère n’est pas pris en charge par cette police : chargez « Ma police ».':'Modification impossible : '+(e.message||e))}
+  }catch(e){console.error(e);toast(/WinAnsi|encode/i.test(String(e.message))?'Un caractère n’est pas pris en charge par cette police : chargez « Mes polices ».':'Modification impossible : '+(e.message||e))}
   busy=false;
 }
 
@@ -414,11 +496,25 @@ $('more').onclick=()=>{
   sel.group.push(n);n.el.classList.add('on');$('txt').value=sel.group.map(g=>g.s).join(' ');
 };
 $('ffile').onchange=async e=>{
-  const f=e.target.files[0];if(!f)return;
-  customFont={bytes:new Uint8Array(await f.arrayBuffer())};
+  const files=[...e.target.files];e.target.value='';if(!files.length)return;
+  const saved=[];let cur=null;
+  for(const f of files){
+    const bytes=new Uint8Array(await f.arrayBuffer());
+    let ps=null,label=f.name;
+    try{const ft=fontkit.create(bytes);ps=ft.postscriptName;label=ft.fullName||label}catch(err){}
+    const k=normName(ps);
+    // enregistrée sous son nom interne : elle sera choisie seule pour tout texte de cette police
+    if(k&&bytes.length<1500000){
+      try{localStorage.setItem('cf:'+k,bytesToB64(bytes));localStorage.removeItem('fk:'+k);saved.push(label)}
+      catch(err){toast('Mémoire du téléphone pleine : police non enregistrée.')}
+    }
+    if(!cur||(sel&&k&&normName(sel.real)===k))cur={bytes,label};
+  }
+  customFont={bytes:cur.bytes};
   let o=[...$('fnt').options].find(o=>o.value==='custom');
   if(!o){o=document.createElement('option');o.value='custom';$('fnt').appendChild(o)}
-  o.textContent='Police : '+f.name;$('fnt').value='custom';
+  o.textContent='Police : '+cur.label;$('fnt').value='custom';
+  if(saved.length)toast('Enregistrée sur ce téléphone : '+saved.join(', ')+'.');
 };
 $('addt').onclick=()=>{if(mode)setMode(mode);addMode=!addMode;$('addt').classList.toggle('main',addMode);toast(addMode?'Touchez la page à l’endroit du texte.':'Ajout annulé.')};
 $('layer').addEventListener('click',e=>{
@@ -441,7 +537,7 @@ const tool=(id,fn)=>$(id).onclick=async()=>{if(!doc||busy)return;busy=true;try{a
 async function move(d){
   const j=pageNo-1+d;
   if(j<0||j>=doc.numPages){toast('Cette page est déjà à cette position.');return}
-  await mutate(async pdf=>{const pg=pdf.getPage(pageNo-1);pdf.removePage(pageNo-1);pdf.insertPage(j,pg)});
+  await mutate(async pdf=>{const pg=pdf.getPage(pageNo-1);pdf.removePage(pageNo-1);pdf.insertPage(j,pg)},o=>o.map(x=>{const p=x.page,i=pageNo-1;let q=p;if(p===i)q=j;else if(i<j&&p>i&&p<=j)q=p-1;else if(i>j&&p>=j&&p<i)q=p+1;return q===p?x:{...x,page:q}}));
   pageNo=j+1;await render();
 }
 tool('rot',()=>mutate(async pdf=>{const p=pdf.getPages()[pageNo-1];p.setRotation(PDFLib.degrees((p.getRotation().angle+90)%360))}));
@@ -449,7 +545,7 @@ tool('mvl',()=>move(-1));tool('mvr',()=>move(1));
 tool('del',async()=>{
   if(doc.numPages<2){toast('Impossible de supprimer la dernière page.');return}
   if(!confirm('Supprimer la page '+pageNo+' ?'))return;
-  await mutate(async pdf=>pdf.removePage(pageNo-1));
+  await mutate(async pdf=>pdf.removePage(pageNo-1),o=>o.filter(x=>x.page!==pageNo-1).map(x=>x.page>pageNo-1?{...x,page:x.page-1}:x));
 });
 $('mfile').onchange=async e=>{
   const f=e.target.files[0];e.target.value='';if(!f||!doc)return;
@@ -497,7 +593,7 @@ function stampE(p){
 pc.addEventListener('pointermove',e=>{
   if(!pts)return;const p=pcPos(e),q=pts[pts.length-1];pts.push(p);
   if(mode==='box'){drawBoxPreview(pts[0],p);return}
-  if(mode==='ctr'){drawContourPreview(pts);return}
+  if(mode==='ctr'){drawContourPreview($('shape').value==='free'?pts:shapePoly(pts[0],p,$('shape').value));return}
   if(mode==='erase'){
     const n=Math.max(1,Math.ceil(Math.hypot(p[0]-q[0],p[1]-q[1])/4));
     for(let t=1;t<=n;t++)stampE([q[0]+(p[0]-q[0])*t/n,q[1]+(p[1]-q[1])*t/n]);
@@ -508,7 +604,7 @@ pc.addEventListener('pointermove',e=>{
 pc.addEventListener('pointerup',()=>{
   if(!pts)return;const P=pts;pts=null;
   if(mode==='box'){finishBox(P);return}
-  if(mode==='ctr'){finishContour(P);return}
+  if(mode==='ctr'){finishContour(P,$('shape').value);return}
   if(mode==='erase'){if(eb){const m=em,b=eb;em=eb=null;run(()=>eraseMagic(m,b))}return}
   if(P.length<2){pcx.clearRect(0,0,pc.width,pc.height);return}
   run(()=>mutate(async pdf=>{
@@ -621,7 +717,7 @@ function placeImage(e){
   }));
 }
 tool('blank',async()=>{
-  await mutate(async pdf=>{const sz=pdf.getPages()[pageNo-1].getSize();pdf.insertPage(pageNo,[sz.width,sz.height])});
+  await mutate(async pdf=>{const sz=pdf.getPages()[pageNo-1].getSize();pdf.insertPage(pageNo,[sz.width,sz.height])},o=>o.map(x=>x.page>=pageNo?{...x,page:x.page+1}:x));
   pageNo++;await render();
 });
 
@@ -654,13 +750,35 @@ function drawContourPreview(P){
   pcx.strokeStyle=$('boxc').value;pcx.lineWidth=Math.max(1.5,$('boxw').value*scale);pcx.lineCap='round';pcx.lineJoin='round';
   pcx.setLineDash([8,5]);tracePath(P,false);pcx.stroke();pcx.setLineDash([]);
 }
-function finishContour(P){
-  const S=simplify(P);
-  if(S.length<4){hideC();toast('Tracez une boucle autour de la zone.');return}
+function shapePoly(a,b,sh){
+  const x0=Math.min(a[0],b[0]),y0=Math.min(a[1],b[1]),x1=Math.max(a[0],b[0]),y1=Math.max(a[1],b[1]),w=x1-x0,h=y1-y0,cx=(x0+x1)/2,cy=(y0+y1)/2;
+  const arc=(ox,oy,rx,ry,t0,t1,n)=>Array.from({length:n+1},(_,i)=>{const t=t0+(t1-t0)*i/n;return[ox+rx*Math.cos(t),oy+ry*Math.sin(t)]});
+  switch(sh){
+    case'rect':return[[x0,y0],[x1,y0],[x1,y1],[x0,y1]];
+    case'round':{const r=Math.min(w,h)*.22,P=Math.PI;return[...arc(x1-r,y0+r,r,r,-P/2,0,8),...arc(x1-r,y1-r,r,r,0,P/2,8),...arc(x0+r,y1-r,r,r,P/2,P,8),...arc(x0+r,y0+r,r,r,P,P*1.5,8)]}
+    case'ellipse':return arc(cx,cy,w/2,h/2,0,Math.PI*2,56).slice(0,-1);
+    case'diamond':return[[cx,y0],[x1,cy],[cx,y1],[x0,cy]];
+    case'triangle':return[[cx,y0],[x1,y1],[x0,y1]];
+    case'star':{const p=[];for(let i=0;i<10;i++){const r=i%2?.45:1,t=-Math.PI/2+i*Math.PI/5;p.push([cx+Math.cos(t)*r*w/2,cy+Math.sin(t)*r*h/2])}return p}
+    case'arrow':{const th=h*.3,hx=x1-Math.min(w*.4,h*.9);return[[x0,cy-th/2],[hx,cy-th/2],[hx,y0],[x1,cy],[hx,y1],[hx,cy+th/2],[x0,cy+th/2]]}
+  }
+  return[];
+}
+function showContour(S){
   cpts=S;pcx.clearRect(0,0,pc.width,pc.height);
   tracePath(S,true);pcx.fillStyle='rgba(36,71,249,.14)';pcx.fill();
-  pcx.strokeStyle=$('boxc').value;pcx.lineWidth=Math.max(1.5,$('boxw').value*scale);pcx.stroke();
+  pcx.strokeStyle=$('boxc').value;pcx.lineWidth=Math.max(1.5,$('boxw').value*scale);pcx.lineJoin='round';pcx.stroke();
   $('cbar').hidden=false;
+}
+function finishContour(P,sh){
+  if(sh&&sh!=='free'){
+    const a=P[0],b=P[P.length-1];
+    if(Math.hypot(b[0]-a[0],b[1]-a[1])<12){hideC();toast('Faites glisser pour tracer la forme.');return}
+    showContour(shapePoly(a,b,sh));return;
+  }
+  const S=simplify(P);
+  if(S.length<4){hideC();toast('Tracez une boucle autour de la zone.');return}
+  showContour(S);
 }
 async function eraseContour(P){
   const k=cv.width/pc.width,W=cv.width,H=cv.height,pts=P.map(p=>[p[0]*k,p[1]*k]);
@@ -709,7 +827,7 @@ if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.
 $('file').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;
   history=[];redo=[];
-  try{await load(new Uint8Array(await f.arrayBuffer()))}catch(err){toast('Ce fichier n’est pas un PDF lisible.')}
+  try{const u8=new Uint8Array(await f.arrayBuffer());base=u8;objs=[];await load(u8)}catch(err){toast('Ce fichier n’est pas un PDF lisible.')}
 };
 $('apply').onclick=apply;
 $('cancel').onclick=closePanel;
@@ -719,8 +837,9 @@ $('zin').onclick=()=>setZoom(zoom+.25);
 $('zout').onclick=()=>setZoom(zoom-.25);
 $('prev').onclick=()=>{pageNo--;render()};
 $('next').onclick=()=>{pageNo++;render()};
-$('undo').onclick=async()=>{if(history.length){redo.push(bytes);await load(history.pop(),true)}};
-$('redo').onclick=async()=>{if(redo.length){history.push(bytes);await load(redo.pop(),true)}};
+async function restore(st){base=st.base;objs=st.objs;await load(await bake(base,objs),true)}
+$('undo').onclick=async()=>{if(history.length){redo.push({base,objs});await restore(history.pop())}};
+$('redo').onclick=async()=>{if(redo.length){history.push({base,objs});await restore(redo.pop())}};
 $('save').onclick=()=>{
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
