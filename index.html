@@ -105,7 +105,7 @@ input[type=range]{accent-color:var(--acc);width:130px}
 <symbol id="i-del" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></symbol>
 </defs></svg>
 <header class="top">
-  <div class="brand"><span class="mark"></span>Éditeur PDF<small style="font-weight:500;color:var(--mute);font-size:.7rem">v15 · courier</small></div>
+  <div class="brand"><span class="mark"></span>Éditeur PDF<small style="font-weight:500;color:var(--mute);font-size:.7rem">v16 · mémoire</small></div>
   <button id="undo" class="ib" disabled aria-label="Annuler"><svg class="i"><use href="#i-undo"/></svg></button>
   <button id="redo" class="ib" disabled aria-label="Rétablir"><svg class="i"><use href="#i-redo"/></svg></button>
   <button id="save" class="ib" disabled aria-label="Télécharger le PDF"><svg class="i"><use href="#i-dl"/></svg></button>
@@ -232,7 +232,7 @@ async function bestByWidth(f,l){
   return best;
 }
 // Polices courantes disponibles en ligne : on reprend la vraie police (ou son équivalent exact) au lieu d'une police proche.
-const WEB=[[/^couriernew/,'courier-prime','Courier Prime, proche de Courier New'],[/^calibri/,'carlito','Carlito, équivalent exact de Calibri'],[/^cambria(?!math)/,'caladea','Caladea, équivalent exact de Cambria'],[/^roboto(?!mono|slab|condensed)/,'roboto','Roboto'],[/^opensans/,'open-sans','Open Sans'],[/^lato/,'lato','Lato'],[/^montserrat/,'montserrat','Montserrat'],[/^poppins/,'poppins','Poppins'],[/^sourcesans/,'source-sans-3','Source Sans'],[/^merriweather/,'merriweather','Merriweather'],[/^playfairdisplay/,'playfair-display','Playfair Display'],[/^ptserif/,'pt-serif','PT Serif'],[/^raleway/,'raleway','Raleway'],[/^nunito/,'nunito','Nunito'],[/^ubuntu(?!mono)/,'ubuntu','Ubuntu'],[/^inter(regular|bold|medium|semibold|light|italic|$)/,'inter','Inter']];
+const WEB=[[/^georgia/,'gelasio','Gelasio, équivalent de Georgia'],[/^(eb)?garamond/,'eb-garamond','EB Garamond'],[/^comicsans/,'comic-neue','Comic Neue, proche de Comic Sans'],[/^futura/,'jost','Jost, proche de Futura'],[/^impact/,'anton','Anton, proche d’Impact'],[/^couriernew/,'courier-prime','Courier Prime, proche de Courier New'],[/^calibri/,'carlito','Carlito, équivalent exact de Calibri'],[/^cambria(?!math)/,'caladea','Caladea, équivalent exact de Cambria'],[/^roboto(?!mono|slab|condensed)/,'roboto','Roboto'],[/^opensans/,'open-sans','Open Sans'],[/^lato/,'lato','Lato'],[/^montserrat/,'montserrat','Montserrat'],[/^poppins/,'poppins','Poppins'],[/^sourcesans/,'source-sans-3','Source Sans'],[/^merriweather/,'merriweather','Merriweather'],[/^playfairdisplay/,'playfair-display','Playfair Display'],[/^ptserif/,'pt-serif','PT Serif'],[/^raleway/,'raleway','Raleway'],[/^nunito/,'nunito','Nunito'],[/^ubuntu(?!mono)/,'ubuntu','Ubuntu'],[/^inter(regular|bold|medium|semibold|light|italic|$)/,'inter','Inter']];
 const WEBALT={'courier-prime':[['cousine','Cousine (mêmes largeurs, sans empattement)'],['cutive-mono','Cutive Mono (machine à écrire fine)']]};
 function webFamily(name){
   const n=(name||'').toLowerCase().replace(/^[a-z]{6}\+/,'').replace(/[^a-z0-9]/g,'');
@@ -304,6 +304,7 @@ function showPanel(){
   setInfo();
   $('more').style.display=sel.add?'none':'';
   $('panel').style.display='block';$('txt').focus();
+  autoPick();
   if(!sel.add)probeWeb(sel);
 }
 function setInfo(){
@@ -331,7 +332,33 @@ async function probeWeb(l){
   const b=await webFontBytes({id},false,false);
   if(!b){wmiss[id]=1;return}
   l.web={id,label:l.real.replace(/^[A-Z]{6}\+/,'')+' (trouvée en ligne)'};
-  if(sel===l){syncWebOption();$('fnt').value='web';setInfo()}
+  if(sel===l){syncWebOption();$('fnt').value='web';setInfo();autoPick()}
+}
+// Mémoire des choix : la police choisie (ou chargée) pour un nom d'origine est réutilisée automatiquement ensuite.
+function normName(n){const t=(n||'').replace(/^[A-Z]{6}\+/,'').toLowerCase();return(!t||/^g_d\d/.test(t))?null:t}
+function bytesToB64(b){let s='';for(let i=0;i<b.length;i+=8192)s+=String.fromCharCode.apply(null,b.subarray(i,i+8192));return btoa(s)}
+function b64ToBytes(t){const s=atob(t),b=new Uint8Array(s.length);for(let i=0;i<s.length;i++)b[i]=s.charCodeAt(i);return b}
+function saveChoice(fk,k){
+  if(!k)return;
+  try{
+    if(fk==='custom'&&customFont&&customFont.bytes.length<1500000){localStorage.setItem('cf:'+k,bytesToB64(customFont.bytes));localStorage.removeItem('fk:'+k)}
+    else if(fk!=='custom'){localStorage.setItem('fk:'+k,fk);localStorage.removeItem('cf:'+k)}
+  }catch(e){}
+}
+function autoPick(){
+  if(!sel||sel.add)return;
+  try{
+    const k=normName(sel.real);if(!k)return;
+    const cf=localStorage.getItem('cf:'+k);
+    if(cf){
+      customFont={bytes:b64ToBytes(cf)};
+      let o=[...$('fnt').options].find(o=>o.value==='custom');
+      if(!o){o=document.createElement('option');o.value='custom';$('fnt').appendChild(o)}
+      o.textContent='Police enregistrée pour '+sel.real;$('fnt').value='custom';return;
+    }
+    const sv=localStorage.getItem('fk:'+k);
+    if(sv&&[...$('fnt').options].some(o=>o.value===sv))$('fnt').value=sv;
+  }catch(e){}
 }
 function choose(l,el){
   document.querySelectorAll('.t.on').forEach(e=>e.classList.remove('on'));
@@ -350,6 +377,7 @@ async function mutate(fn){
 async function apply(){
   if(!sel||busy)return;
   busy=true;
+  const realKey=normName(sel.real);
   const text=$('txt').value,size=parseFloat($('sz').value)||sel.size,color=unhex($('col').value),fk=$('fnt').value;
   try{
     let tooLong=false;
@@ -373,6 +401,7 @@ async function apply(){
       rows.forEach((r,i)=>page.drawText(r,{x:sel.x,y:sel.y-i*lead,size,font,color:c(color)}));
       tooLong=rows.length>g.length||(!sel.add&&g.length===1&&font.widthOfTextAtSize(text,size)>sel.w*1.02);
     });
+    saveChoice(fk,realKey);
     if(tooLong)toast('Le nouveau texte est plus long que l’original : vérifiez qu’il ne recouvre rien.');
   }catch(e){console.error(e);toast(/WinAnsi|encode/i.test(String(e.message))?'Un caractère n’est pas pris en charge par cette police : chargez « Ma police ».':'Modification impossible : '+(e.message||e))}
   busy=false;
