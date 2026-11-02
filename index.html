@@ -121,7 +121,7 @@ body[data-mode=mag] #opts{display:flex}body[data-mode=mag] .o-mag{display:flex}b
 <symbol id="i-del" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></symbol>
 </defs></svg>
 <header class="top">
-  <div class="brand"><span class="mark"></span>Éditeur PDF<small style="font-weight:500;color:var(--mute);font-size:.7rem">v25 · outil Mots</small></div>
+  <div class="brand"><span class="mark"></span>Éditeur PDF<small style="font-weight:500;color:var(--mute);font-size:.7rem">v26 · suppression fiable</small></div>
   <button id="undo" class="ib" disabled aria-label="Annuler"><svg class="i"><use href="#i-undo"/></svg></button>
   <button id="redo" class="ib" disabled aria-label="Rétablir"><svg class="i"><use href="#i-redo"/></svg></button>
   <button id="clean" class="ib" aria-label="Aperçu propre : masque tous les repères"><svg class="i"><use href="#i-eye"/></svg></button>
@@ -898,8 +898,15 @@ async function eraseMagic(mk,b,allow,quiet){
   // zone réellement gommée, à l'échelle de la page : sert à retrouver ce qui se trouvait dessous
   const fm=new Uint8Array(W*H),kd=cv.width/curVp.width;
   for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(op[y*w+x])fm[(y0+y)*W+x0+x]=1;
-  const hit=(px,py)=>{const[vx,vy]=curVp.convertToViewportPoint(px,py),X=Math.floor(vx*kd),Y=Math.floor(vy*kd);return X>=0&&Y>=0&&X<W&&Y<H&&fm[Y*W+X]===1};
   const gx0=x0+ax0,gy0=y0+ay0,gx1=x0+ax1,gy1=y0+ay1;
+  // hit(x, y, r) : le point (unités PDF) est-il à moins de r de la zone effacée ? La tolérance comble
+  // l'intérieur des lettres (« o », « n »…) quand la sélection suit exactement l'encre (outils Mots et Baguette).
+  const pad=36,lx0=Math.max(0,gx0-pad),ly0=Math.max(0,gy0-pad),lw=Math.min(W-1,gx1+pad)-lx0+1,lh=Math.min(H-1,gy1+pad)-ly0+1;
+  const loc=new Uint8Array(lw*lh);for(let y=0;y<lh;y++)for(let x=0;x<lw;x++)loc[y*lw+x]=fm[(ly0+y)*W+lx0+x];
+  const RS=[0,2,4,6,9,13,18,25,35],dc=new Map();
+  const dm=r=>{const R=RS.find(v=>v>=r);const k=R===undefined?35:R;if(!dc.has(k))dc.set(k,k?dilate(loc,lw,lh,k):loc);return dc.get(k)};
+  const hit=(px,py,ru=0)=>{const[vx,vy]=curVp.convertToViewportPoint(px,py),X=Math.floor(vx*kd)-lx0,Y=Math.floor(vy*kd)-ly0;
+    return X>=0&&Y>=0&&X<lw&&Y<lh&&dm(ru*scale*kd)[Y*lw+X]===1};
   const imgHit=M=>{   // une image (carré unité transformé par M) recouvre-t-elle la zone gommée ?
     const P=[[0,0],[1,0],[0,1],[1,1]].map(([u,v])=>{const[vx,vy]=curVp.convertToViewportPoint(...ap(M,u,v));return[vx*kd,vy*kd]});
     const a0=Math.max(gx0,Math.floor(Math.min(...P.map(p=>p[0])))),a1=Math.min(gx1,Math.ceil(Math.max(...P.map(p=>p[0]))));
@@ -1049,9 +1056,9 @@ async function processContent(pdf,src,res,ctm0,hit,imgHit,rep,depth){
             const w0=f?f.w(code):.5,tx=(w0*gs.Tfs+gs.Tc+(!two&&code===32?gs.Tw:0))*gs.Th;
             let del=false;
             if(f&&sc){
-              const T=mul([sc,0,0,gs.Tfs,0,gs.Ts],mul(Tm,gs.ctm)),wu=Math.max(w0,.05);
-              if(hit(...ap(T,wu*.5,.3)))del=true;
-              else{let c=0;for(const u of[.2,.5,.8])for(const v of[.05,.3,.55])if(hit(...ap(T,wu*u,v)))c++;del=c>=5}
+              // la lettre part si l'essentiel de sa surface est sous la zone effacée (tolérance : 15 % de sa hauteur)
+              const T=mul([sc,0,0,gs.Tfs,0,gs.Ts],mul(Tm,gs.ctm)),wu=Math.max(w0,.05),ru=.15*Math.hypot(T[2],T[3]);
+              if(hit(...ap(T,wu*.5,.3),ru)){let c=0;for(const u of[.1,.3,.5,.7,.9])for(const v of[0,.15,.3,.45,.6])if(hit(...ap(T,wu*u,v),ru))c++;del=c>=15}
             }
             if(del){pN(-tx/sc*1000);removed++}else pS(bytes);
             Tm=mul([1,0,0,1,tx,0],Tm);
@@ -1124,7 +1131,7 @@ async function leftoverText(nb,pi,hit){
       for(let k=0;k<s.length;k++){
         if(!s[k].trim())continue;
         const c=(k+.5)*cw;
-        if([c-cw*.35,c,c+cw*.35].every(u=>hit(t[4]+dx*u+px*.3*sz,t[5]+dy*u+py*.3*sz)))return true;
+        if([c-cw*.35,c,c+cw*.35].every(u=>hit(t[4]+dx*u+px*.3*sz,t[5]+dy*u+py*.3*sz,.15*sz)))return true;
       }
     }
     return false;
