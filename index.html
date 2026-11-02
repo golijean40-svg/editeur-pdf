@@ -120,7 +120,7 @@ body[data-mode=mag] #opts{display:flex}body[data-mode=mag] .o-mag{display:flex}
 <symbol id="i-del" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></symbol>
 </defs></svg>
 <header class="top">
-  <div class="brand"><span class="mark"></span>Éditeur PDF<small style="font-weight:500;color:var(--mute);font-size:.7rem">v23 · corrections</small></div>
+  <div class="brand"><span class="mark"></span>Éditeur PDF<small style="font-weight:500;color:var(--mute);font-size:.7rem">v24 · suppression réelle</small></div>
   <button id="undo" class="ib" disabled aria-label="Annuler"><svg class="i"><use href="#i-undo"/></svg></button>
   <button id="redo" class="ib" disabled aria-label="Rétablir"><svg class="i"><use href="#i-redo"/></svg></button>
   <button id="clean" class="ib" aria-label="Aperçu propre : masque tous les repères"><svg class="i"><use href="#i-eye"/></svg></button>
@@ -135,8 +135,8 @@ body[data-mode=mag] #opts{display:flex}body[data-mode=mag] .o-mag{display:flex}
 </section>
 <div id="stage" hidden><canvas id="cv"></canvas><div id="layer"></div><canvas id="zc"></canvas><canvas id="pc"></canvas></div>
 <div id="dockwrap">
-  <div id="zbar" hidden><span>Sélection active</span><button id="z-er">Effacer la sélection</button><button id="z-no">Désélectionner</button></div>
-  <div id="cbar" hidden><button id="c-er">Effacer</button><button id="c-hl">Surligner</button><button id="c-cp">Copier</button><button id="c-ct">Couper</button><button id="c-keep">Tracer le contour</button><button id="c-no">Annuler</button></div>
+  <div id="zbar" hidden><span>Sélection active</span><button id="z-mv">Déplacer</button><button id="z-er">Effacer la sélection</button><button id="z-no">Désélectionner</button></div>
+  <div id="cbar" hidden><button id="c-er">Effacer</button><button id="c-hl">Surligner</button><button id="c-mv">Déplacer</button><button id="c-cp">Copier</button><button id="c-ct">Couper</button><button id="c-keep">Tracer le contour</button><button id="c-no">Annuler</button></div>
   <div id="ibar" hidden><button id="i-l" aria-label="Décaler à gauche">◀</button><button id="i-u" aria-label="Décaler vers le haut">▲</button><button id="i-d" aria-label="Décaler vers le bas">▼</button><button id="i-r" aria-label="Décaler à droite">▶</button><button id="i-min" aria-label="Réduire">−</button><button id="i-pls" aria-label="Agrandir">+</button><button id="i-ed">Modifier</button><button id="i-nb">Sans fond</button><button id="i-del">Supprimer</button><button id="i-ok">OK</button></div>
   <div id="opts">
     <div class="o o-hl"><span>Surligneur</span><input id="hlc" type="color" value="#ffe600" aria-label="Couleur du surligneur"></div>
@@ -144,7 +144,7 @@ body[data-mode=mag] #opts{display:flex}body[data-mode=mag] .o-mag{display:flex}
     <div class="o o-ctr"><span>Forme</span><select id="shape" aria-label="Forme du contour"><option value="free">Libre</option><option value="rect">Rectangle</option><option value="round">Rectangle arrondi</option><option value="ellipse">Ovale</option><option value="diamond">Losange</option><option value="triangle">Triangle</option><option value="star">Étoile</option><option value="arrow">Flèche</option></select></div>
     <div class="o o-box"><span>Cadre</span><input id="boxc" type="color" value="#2447f9" aria-label="Couleur du cadre"><input id="boxw" type="range" min="1" max="6" step="0.5" value="2" aria-label="Épaisseur du cadre"></div>
     <div class="o o-mag"><span>Tolérance</span><input id="mtol" type="range" min="15" max="140" value="60" aria-label="Tolérance de couleur"><label style="display:flex;align-items:center;gap:6px"><input id="mline" type="checkbox" checked>Ignorer les traits</label></div>
-    <div class="o o-er"><span>Taille</span><input id="brs" type="range" min="4" max="60" value="14" aria-label="Taille de la gomme"></div>
+    <div class="o o-er"><span>Taille</span><input id="brs" type="range" min="4" max="60" value="14" aria-label="Taille de la gomme"><label style="display:flex;align-items:center;gap:6px"><input id="real" type="checkbox" checked>Suppression réelle</label></div>
   </div>
   <div id="nav">
     <button id="prev" aria-label="Page précédente"><svg class="i"><use href="#i-l"/></svg></button><span id="pg"></span><button id="next" aria-label="Page suivante"><svg class="i"><use href="#i-r"/></svg></button>
@@ -452,6 +452,7 @@ async function bake(b,list){   // PDF final : page de base + éléments dessiné
   if(!list.length)return b;
   const pdf=await PDFLib.PDFDocument.load(b,{ignoreEncryption:true});
   await drawObjs(pdf,list);
+  gc(pdf);
   return await pdf.save();
 }
 async function objsPdf(b,list){   // calque transparent : mêmes pages, seulement les éléments ajoutés
@@ -473,6 +474,7 @@ async function commit(nb,no){
 async function mutate(fn,remap){
   const pdf=await PDFLib.PDFDocument.load(base,{ignoreEncryption:true});
   await fn(pdf);
+  gc(pdf);
   const nb=await pdf.save();
   await commit(nb,remap?remap(objs):objs);
 }
@@ -638,6 +640,9 @@ async function apply(){
         else{toast('Police exacte indisponible (connexion ?) : police proche utilisée.');font=await pdf.embedFont(PDFLib.StandardFonts[sel.key])}
       }else font=await pdf.embedFont(PDFLib.StandardFonts[fk]);
       const c=a=>PDFLib.rgb(a[0]/255,a[1]/255,a[2]/255),g=sel.group;
+      // l'ancien texte est retiré du fichier (pas seulement recouvert)
+      if(realOn()){const R=g.map(l=>[l.x-1.5,l.x+l.w+1.5,l.y-l.size*.28,l.y+l.size*.97]);
+        try{await redactPage(pdf,page,(x,y)=>R.some(r=>x>=r[0]&&x<=r[1]&&y>=r[2]&&y<=r[3]),()=>false)}catch(e){console.error(e)}}
       g.forEach(l=>page.drawRectangle({x:l.x-1.5,y:l.y-l.size*0.28,width:l.w+3,height:l.size*1.25,color:c(l.bg)}));
       if(!text.trim())return;
       const maxW=g.length===1?1e9:Math.max(...g.map(l=>l.w));
@@ -863,8 +868,9 @@ async function flattenIfTouched(b){
   toast('Les éléments touchés sont maintenant fixés dans la page.');
   return true;
 }
-async function eraseMagic(mk,b,allow){
-  const flat=await flattenIfTouched(b);
+async function eraseMagic(mk,b,allow,quiet){
+  const b0=base,o0=objs;
+  await flattenIfTouched(b);
   const W=cv.width,H=cv.height,R=Math.max(4,Math.round($('brs').value*(W/pc.width)/2)),mg=R+8;
   const x0=Math.max(0,b[0]-mg),y0=Math.max(0,b[1]-mg),x1=Math.min(W-1,b[2]+mg),y1=Math.min(H-1,b[3]+mg),w=x1-x0+1,h=y1-y0+1;
   const img=ctx.getImageData(x0,y0,w,h),d=img.data;
@@ -884,12 +890,321 @@ async function eraseMagic(mk,b,allow){
   t2.getContext('2d').drawImage(t,ax0,ay0,cw,ch,0,0,cw,ch);
   const bytes=new Uint8Array(await (await new Promise(r=>t2.toBlob(r,'image/png'))).arrayBuffer());
   const k=pc.width/cv.width,pa=curVp.convertToPdfPoint((x0+ax0)*k,(y0+ay0)*k),pb=curVp.convertToPdfPoint((x0+ax1+1)*k,(y0+ay1+1)*k);
-  await mutate(async pdf=>{
-    const pg=pdf.getPages()[pageNo-1],emb=await pdf.embedPng(bytes);
-    pg.drawImage(emb,{x:Math.min(pa[0],pb[0]),y:Math.min(pa[1],pb[1]),width:Math.abs(pb[0]-pa[0]),height:Math.abs(pb[1]-pa[1])});
-  });
-  // « fixer les éléments » + gommer = une seule étape à annuler
-  if(flat&&history.length>1)history.pop();
+  // zone réellement gommée, à l'échelle de la page : sert à retrouver ce qui se trouvait dessous
+  const fm=new Uint8Array(W*H),kd=cv.width/curVp.width;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(op[y*w+x])fm[(y0+y)*W+x0+x]=1;
+  const hit=(px,py)=>{const[vx,vy]=curVp.convertToViewportPoint(px,py),X=Math.floor(vx*kd),Y=Math.floor(vy*kd);return X>=0&&Y>=0&&X<W&&Y<H&&fm[Y*W+X]===1};
+  const gx0=x0+ax0,gy0=y0+ay0,gx1=x0+ax1,gy1=y0+ay1;
+  const imgHit=M=>{   // une image (carré unité transformé par M) recouvre-t-elle la zone gommée ?
+    const P=[[0,0],[1,0],[0,1],[1,1]].map(([u,v])=>{const[vx,vy]=curVp.convertToViewportPoint(...ap(M,u,v));return[vx*kd,vy*kd]});
+    const a0=Math.max(gx0,Math.floor(Math.min(...P.map(p=>p[0])))),a1=Math.min(gx1,Math.ceil(Math.max(...P.map(p=>p[0]))));
+    const c0=Math.max(gy0,Math.floor(Math.min(...P.map(p=>p[1])))),c1=Math.min(gy1,Math.ceil(Math.max(...P.map(p=>p[1]))));
+    for(let y=c0;y<=c1;y+=2)for(let x=a0;x<=a1;x+=2)if(fm[y*W+x])return true;
+    return false;
+  };
+  const real=realOn(),pdf=await PDFLib.PDFDocument.load(base,{ignoreEncryption:true}),pg=pdf.getPages()[pageNo-1];
+  let rep={removed:0,img:false};
+  if(real){try{rep=await redactPage(pdf,pg,hit,imgHit)}catch(e){console.error(e);rep.img=true}}   // contenu illisible : on aplatit, par sécurité
+  pg.drawImage(await pdf.embedPng(bytes),{x:Math.min(pa[0],pb[0]),y:Math.min(pa[1],pb[1]),width:Math.abs(pb[0]-pa[0]),height:Math.abs(pb[1]-pa[1])});
+  gc(pdf);
+  let nb=await pdf.save(),flat=false;
+  if(real&&(rep.img||((rep.removed||lines.length)&&await leftoverText(nb,pageNo-1,hit)))){nb=await flattenPage(nb,pageNo-1);flat=true}
+  await commit(nb,objs);
+  squashTo(b0,o0);   // « fixer les éléments » + gommer = une seule étape à annuler
+  if(quiet||!real)return;
+  if(flat)toast('✓ Supprimé pour de vrai. Une image ou un texte complexe se trouvait dessous : cette page est devenue une image.');
+  else if(rep.removed)toast('✓ Texte réellement supprimé ('+rep.removed+' caractère'+(rep.removed>1?'s':'')+').');
+}
+
+// ===== Suppression réelle =====
+// La gomme ne se contente plus de recouvrir : les caractères situés sous la zone sont retirés du contenu de la page.
+// Si une image se trouve dessous, ou s'il reste du texte que l'on n'a pas su retirer, la page est convertie en image.
+const N=n=>PDFLib.PDFName.of(n);
+const u8s=b=>{let s='';for(let i=0;i<b.length;i+=8192)s+=String.fromCharCode.apply(null,b.subarray(i,i+8192));return s};
+const su8=s=>{const b=new Uint8Array(s.length);for(let i=0;i<s.length;i++)b[i]=s.charCodeAt(i)&255;return b};
+const fmt=v=>{const r=Math.round(v*1000)/1000;return String(Object.is(r,-0)?0:r)};
+const hexOf=s=>{let h='';for(let i=0;i<s.length;i++)h+=s.charCodeAt(i).toString(16).padStart(2,'0');return h};
+const mul=(A,B)=>[A[0]*B[0]+A[1]*B[2],A[0]*B[1]+A[1]*B[3],A[2]*B[0]+A[3]*B[2],A[2]*B[1]+A[3]*B[3],A[4]*B[0]+A[5]*B[2]+B[4],A[4]*B[1]+A[5]*B[3]+B[5]];
+const ap=(M,x,y)=>[M[0]*x+M[2]*y+M[4],M[1]*x+M[3]*y+M[5]];
+const ID6=[1,0,0,1,0,0];
+const pnm=o=>o&&o.toString?o.toString():'';
+const pnv=o=>o&&o.asNumber?o.asNumber():0;
+function streamBytes(s){
+  if(s instanceof PDFLib.PDFRawStream)return PDFLib.decodePDFRawStream(s).decode();
+  if(s.getUnencodedContents)return s.getUnencodedContents();
+  return s.getContents();
+}
+// Découpe un flux de contenu PDF en opérations, en gardant leur position pour ne réécrire que ce qui change.
+const WSC=new Set([0,9,10,12,13,32]),DLC=new Set([40,41,60,62,91,93,123,125,47,37]);
+function lexPdf(src){
+  let i=0;const n=src.length,ops=[];let args=[],st=-1;
+  const ws=()=>{for(;;){while(i<n&&WSC.has(src.charCodeAt(i)))i++;if(i<n&&src[i]==='%'){while(i<n&&src[i]!=='\n'&&src[i]!=='\r')i++;continue}break}};
+  const word=()=>{let s='';while(i<n&&!WSC.has(src.charCodeAt(i))&&!DLC.has(src.charCodeAt(i)))s+=src[i++];return s};
+  function val(){
+    const c=src[i];
+    if(c==='('){i++;let d=1,o='';
+      while(i<n){const ch=src[i++];
+        if(ch==='\\'){const x=src[i++];
+          if(x==='n')o+='\n';else if(x==='r')o+='\r';else if(x==='t')o+='\t';else if(x==='b')o+='\b';else if(x==='f')o+='\f';
+          else if(x>='0'&&x<='7'){let v=x;for(let k=0;k<2&&src[i]>='0'&&src[i]<='7';k++)v+=src[i++];o+=String.fromCharCode(parseInt(v,8)&255)}
+          else if(x==='\r'){if(src[i]==='\n')i++}else if(x!=='\n')o+=x}
+        else if(ch==='('){d++;o+=ch}else if(ch===')'){if(--d===0)break;o+=ch}else o+=ch}
+      return{t:'s',v:o}}
+    if(c==='<'){
+      if(src[i+1]==='<'){i+=2;const d={};for(;;){ws();if(i>=n)break;if(src[i]==='>'&&src[i+1]==='>'){i+=2;break}const k=val();ws();if(i>=n)break;const v=val();if(k.t==='n')d[k.v]=v}return{t:'d',v:d}}
+      i++;let h='';while(i<n&&src[i]!=='>')h+=src[i++];i++;h=h.replace(/[^0-9a-fA-F]/g,'');if(h.length%2)h+='0';
+      let o='';for(let k=0;k<h.length;k+=2)o+=String.fromCharCode(parseInt(h.substr(k,2),16));return{t:'s',v:o}}
+    if(c==='['){i++;const a=[];for(;;){ws();if(i>=n)break;if(src[i]===']'){i++;break}a.push(val())}return{t:'a',v:a}}
+    if(c==='/'){i++;return{t:'n',v:word().replace(/#([0-9a-fA-F]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16)))}}
+    const s=word();
+    if(!s){i++;return{t:'x'}}   // délimiteur isolé : ignoré
+    if(/^[+-]?(\d+\.?\d*|\.\d+)$/.test(s))return{t:'#',v:parseFloat(s)};
+    return{t:'k',v:s};
+  }
+  for(;;){
+    ws();if(i>=n)break;
+    const s0=i,v=val();
+    if(v.t==='x')continue;
+    if(st<0)st=s0;
+    if(v.t!=='k'||v.v==='true'||v.v==='false'||v.v==='null'){args.push(v);continue}
+    if(v.v==='BI'){   // image en ligne : dictionnaire jusqu'à ID, puis données brutes jusqu'à EI
+      for(;;){ws();if(i>=n)break;const k=val();if(k.t==='k'&&k.v==='ID')break;ws();if(i<n)val()}
+      i++;const re=/[\0\t\n\f\r ]EI(?=[\0\t\n\f\r ]|$)/g;re.lastIndex=i;const m=re.exec(src);i=m?m.index+3:n;
+      ops.push({op:'BI',args:[],s:st,e:i});args=[];st=-1;continue}
+    ops.push({op:v.v,args,s:st,e:i});args=[];st=-1;
+  }
+  return ops;
+}
+// Largeurs des caractères d'une police, pour savoir où tombe chaque lettre.
+const fcache=new WeakMap();
+async function fontInfo(fd){
+  const st=pnm(fd.lookup(N('Subtype')));
+  if(st==='/Type0'){
+    const da=fd.lookup(N('DescendantFonts')),desc=da&&da.lookup?da.lookup(0):null,W=new Map();
+    const dwo=desc&&desc.lookup(N('DW')),dw=dwo?pnv(dwo):1000,wa=desc&&desc.lookup(N('W'));
+    if(wa&&wa.size){let i=0;const L=wa.size();
+      while(i<L){const c=pnv(wa.lookup(i)),nx=wa.lookup(i+1);
+        if(nx instanceof PDFLib.PDFArray){for(let j=0;j<nx.size();j++)W.set(c+j,pnv(nx.lookup(j)));i+=2}
+        else{const c2=pnv(nx),w=pnv(wa.lookup(i+2));for(let j=c;j<=c2&&j-c<65536;j++)W.set(j,w);i+=3}}}
+    return{two:true,w:c=>(W.has(c)?W.get(c):dw)/1000};
+  }
+  let fm=.001;
+  if(st==='/Type3'){const m=fd.lookup(N('FontMatrix'));if(m&&m.lookup)fm=pnv(m.lookup(0))}
+  const fc=pnv(fd.lookup(N('FirstChar'))),wa=fd.lookup(N('Widths')),desc=fd.lookup(N('FontDescriptor'));
+  const mw=desc&&desc.lookup?pnv(desc.lookup(N('MissingWidth'))):0;
+  if(wa&&wa.size){const arr=[];for(let j=0;j<wa.size();j++)arr.push(pnv(wa.lookup(j)));return{two:false,w:c=>{const v=arr[c-fc];return(v!=null?v:mw)*fm}}}
+  const base=pnm(fd.lookup(N('BaseFont'))).slice(1);   // police standard sans largeurs : métriques de pdf-lib
+  if(!/symbol|zapf|dingbat/i.test(base)){
+    try{const key=pickFont(base).key;if(!mdoc)mdoc=await PDFLib.PDFDocument.create();if(!mcache[key])mcache[key]=await mdoc.embedFont(PDFLib.StandardFonts[key]);
+      const ft=mcache[key];return{two:false,w:c=>{try{return ft.widthOfTextAtSize(String.fromCharCode(c),1)}catch(e){return .5}}}}catch(e){}
+  }
+  return{two:false,w:()=>.6};
+}
+async function getFont(fr,name){
+  if(!fr||!fr.lookup)return null;
+  const fd=fr.lookup(N(name));if(!(fd instanceof PDFLib.PDFDict))return null;
+  if(fcache.has(fd))return fcache.get(fd);
+  let f=null;try{f=await fontInfo(fd)}catch(e){}
+  fcache.set(fd,f);return f;
+}
+const SKIPK=()=>new Set([N('Filter'),N('DecodeParms'),N('Length'),N('DL')]);
+// Parcourt un flux (page ou formulaire), retire les lettres touchées et signale les images sous la zone.
+async function processContent(pdf,src,res,ctm0,hit,imgHit,rep,depth){
+  const ops=lexPdf(src);
+  const fontRes=res&&res.lookup?res.lookup(N('Font')):null,xoRes=res&&res.lookup?res.lookup(N('XObject')):null;
+  let gs={ctm:ctm0,Tc:0,Tw:0,Th:1,TL:0,font:null,Tfs:0,Ts:0},Tm=ID6,Tlm=ID6;
+  const stack=[],edits=[],xoCur={},xoNew={};
+  for(const o of ops){
+    const a=o.args,nu=k=>a[k]&&a[k].t==='#'?a[k].v:0;
+    switch(o.op){
+      case'q':stack.push({...gs});break;
+      case'Q':if(stack.length)gs=stack.pop();break;
+      case'cm':gs.ctm=mul([nu(0),nu(1),nu(2),nu(3),nu(4),nu(5)],gs.ctm);break;
+      case'BT':Tm=Tlm=ID6;break;
+      case'Tc':gs.Tc=nu(0);break;case'Tw':gs.Tw=nu(0);break;case'Tz':gs.Th=nu(0)/100;break;case'TL':gs.TL=nu(0);break;case'Ts':gs.Ts=nu(0);break;
+      case'Tf':gs.font=a[0]&&a[0].t==='n'?await getFont(fontRes,a[0].v):null;gs.Tfs=nu(1);break;
+      case'Td':Tlm=mul([1,0,0,1,nu(0),nu(1)],Tlm);Tm=Tlm;break;
+      case'TD':gs.TL=-nu(1);Tlm=mul([1,0,0,1,nu(0),nu(1)],Tlm);Tm=Tlm;break;
+      case'Tm':Tlm=Tm=[nu(0),nu(1),nu(2),nu(3),nu(4),nu(5)];break;
+      case'T*':Tlm=mul([1,0,0,1,0,-gs.TL],Tlm);Tm=Tlm;break;
+      case"'":case'"':case'Tj':case'TJ':{
+        let pre='';
+        if(o.op==='"'){gs.Tw=nu(0);gs.Tc=nu(1);pre=fmt(nu(0))+' Tw '+fmt(nu(1))+' Tc '}
+        if(o.op==="'"||o.op==='"'){Tlm=mul([1,0,0,1,0,-gs.TL],Tlm);Tm=Tlm;pre+='T* '}
+        const items=o.op==='TJ'?(a[0]&&a[0].t==='a'?a[0].v:[]):[a[a.length-1]||{t:'s',v:''}];
+        const f=gs.font,sc=gs.Tfs*gs.Th,tk=[];let removed=0;
+        const pS=b=>{const l=tk[tk.length-1];if(l&&l.s!=null)l.s+=b;else tk.push({s:b})};
+        const pN=v=>{const l=tk[tk.length-1];if(l&&l.n!=null)l.n+=v;else tk.push({n:v})};
+        for(const it of items){
+          if(it.t==='#'){Tm=mul([1,0,0,1,-it.v/1000*sc,0],Tm);pN(it.v);continue}
+          if(it.t!=='s')continue;
+          const str=it.v,two=!!(f&&f.two);
+          for(let k=0;k<str.length;k+=two?2:1){
+            const code=two?(str.charCodeAt(k)<<8)|(str.charCodeAt(k+1)||0):str.charCodeAt(k),bytes=two?str.substr(k,2):str[k];
+            const w0=f?f.w(code):.5,tx=(w0*gs.Tfs+gs.Tc+(!two&&code===32?gs.Tw:0))*gs.Th;
+            let del=false;
+            if(f&&sc){
+              const T=mul([sc,0,0,gs.Tfs,0,gs.Ts],mul(Tm,gs.ctm)),wu=Math.max(w0,.05);
+              if(hit(...ap(T,wu*.5,.3)))del=true;
+              else{let c=0;for(const u of[.2,.5,.8])for(const v of[.05,.3,.55])if(hit(...ap(T,wu*u,v)))c++;del=c>=5}
+            }
+            if(del){pN(-tx/sc*1000);removed++}else pS(bytes);
+            Tm=mul([1,0,0,1,tx,0],Tm);
+          }
+        }
+        if(removed){rep.removed+=removed;edits.push({s:o.s,e:o.e,txt:pre+'['+tk.map(t=>t.s!=null?'<'+hexOf(t.s)+'>':fmt(t.n)).join(' ')+'] TJ'})}
+        break}
+      case'BI':if(imgHit(gs.ctm))rep.img=true;break;
+      case'Do':{
+        const name=a[0]&&a[0].t==='n'?a[0].v:null;if(!name||!xoRes||!xoRes.lookup)break;
+        let cur=xoCur[name];
+        if(!cur){const s=xoRes.lookup(N(name));if(!(s instanceof PDFLib.PDFStream))break;cur=xoCur[name]={s,bytes:null}}
+        const stn=pnm(cur.s.dict.lookup(N('Subtype')));
+        if(stn==='/Image'){if(imgHit(gs.ctm))rep.img=true;break}
+        if(stn!=='/Form'||depth>6)break;
+        const mx=cur.s.dict.lookup(N('Matrix'));let M=ID6;
+        if(mx&&mx.size&&mx.size()===6){M=[];for(let j=0;j<6;j++)M.push(pnv(mx.lookup(j)))}
+        const fres=cur.s.dict.lookup(N('Resources'))||res;
+        const bytes=cur.bytes!=null?cur.bytes:u8s(streamBytes(cur.s));
+        const sub=await processContent(pdf,bytes,fres,mul(M,gs.ctm),hit,imgHit,rep,depth+1);
+        if(sub.out!==null||sub.res){   // formulaire modifié : copie propre à cette page
+          const nb=sub.out!==null?sub.out:bytes,ns=pdf.context.flateStream(su8(nb)),skip=SKIPK();
+          for(const[k,v]of cur.s.dict.entries())if(!skip.has(k))ns.dict.set(k,v);
+          if(sub.res)ns.dict.set(N('Resources'),sub.res);
+          xoNew[name]=pdf.context.register(ns);xoCur[name]={s:ns,bytes:nb};
+        }
+        break}
+    }
+  }
+  let out=null;
+  if(edits.length){out='';let p=0;for(const ed of edits){out+=src.slice(p,ed.s)+' '+ed.txt+' ';p=ed.e}out+=src.slice(p)}
+  let nres=null;
+  if(Object.keys(xoNew).length){nres=res.clone(pdf.context);const xo=xoRes.clone(pdf.context);for(const k in xoNew)xo.set(N(k),xoNew[k]);nres.set(N('XObject'),xo)}
+  return{out,res:nres};
+}
+async function redactPage(pdf,pg,hit,imgHit){
+  const rep={removed:0,img:false},raw=pg.node.lookup(N('Contents'));
+  if(!raw)return rep;
+  const streams=[];
+  if(raw instanceof PDFLib.PDFArray){for(let i=0;i<raw.size();i++){const s=raw.lookup(i);if(s instanceof PDFLib.PDFStream)streams.push(s)}}
+  else if(raw instanceof PDFLib.PDFStream)streams.push(raw);
+  const src=streams.map(s=>u8s(streamBytes(s))).join('\n');
+  const r=await processContent(pdf,src,pg.node.Resources(),ID6,hit,imgHit,rep,0);
+  if(r.out!==null){const ref=pdf.context.register(pdf.context.flateStream(su8(r.out)));pg.node.set(N('Contents'),pdf.context.obj([ref]))}
+  if(r.res)pg.node.set(N('Resources'),r.res);
+  return rep;
+}
+// Retire du fichier les objets qui ne sont plus utilisés (sinon l'ancien texte resterait caché dedans).
+function gc(pdf){
+  const c=pdf.context,ti=c.trailerInfo;if(!ti||!ti.Root)return;
+  const seen=new Set(),st=[ti.Root,ti.Info,ti.Encrypt,ti.ID];
+  while(st.length){
+    const o=st.pop();if(!o)continue;
+    if(o instanceof PDFLib.PDFRef){if(seen.has(o.tag))continue;seen.add(o.tag);st.push(c.lookup(o));continue}
+    if(o instanceof PDFLib.PDFDict){for(const[,v]of o.entries())st.push(v)}
+    else if(o instanceof PDFLib.PDFArray){for(let i=0;i<o.size();i++)st.push(o.get(i))}
+    else if(o instanceof PDFLib.PDFStream)st.push(o.dict);
+  }
+  for(const[ref]of c.enumerateIndirectObjects())if(!seen.has(ref.tag))c.delete(ref);
+}
+// Vérification indépendante (lecture par pdf.js) : reste-t-il une lettre sous la zone ?
+async function leftoverText(nb,pi,hit){
+  const d=await pdfjsLib.getDocument({data:nb.slice()}).promise;
+  try{
+    const tc=await (await d.getPage(pi+1)).getTextContent();
+    for(const it of tc.items){
+      const s=it.str||'';if(!s.trim()||!it.width)continue;
+      const t=it.transform,na=Math.hypot(t[0],t[1])||1,nb2=Math.hypot(t[2],t[3])||1,sz=nb2;
+      const dx=t[0]/na,dy=t[1]/na,px=t[2]/nb2,py=t[3]/nb2,cw=it.width/s.length;
+      for(let k=0;k<s.length;k++){
+        if(!s[k].trim())continue;
+        const c=(k+.5)*cw;
+        if([c-cw*.35,c,c+cw*.35].every(u=>hit(t[4]+dx*u+px*.3*sz,t[5]+dy*u+py*.3*sz)))return true;
+      }
+    }
+    return false;
+  }finally{d.destroy()}
+}
+// Dernier recours : la page devient une image (rien de caché ne peut plus y subsister).
+async function flattenPage(nb,pi){
+  const d=await pdfjsLib.getDocument({data:nb.slice()}).promise;let jpg;
+  try{
+    const p=await d.getPage(pi+1),v1=p.getViewport({scale:1,rotation:0}),s=Math.min(3,2400/Math.max(v1.width,v1.height)),v=p.getViewport({scale:s,rotation:0});
+    const c=document.createElement('canvas');c.width=Math.round(v.width);c.height=Math.round(v.height);
+    const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
+    await p.render({canvasContext:x,viewport:v,annotationMode:pdfjsLib.AnnotationMode.DISABLE}).promise;
+    jpg=new Uint8Array(await (await new Promise(r=>c.toBlob(r,'image/jpeg',.92))).arrayBuffer());
+  }finally{d.destroy()}
+  const pdf=await PDFLib.PDFDocument.load(nb,{ignoreEncryption:true}),pg=pdf.getPages()[pi],cb=pg.getCropBox();
+  pg.node.set(N('Contents'),pdf.context.obj([]));pg.node.set(N('Resources'),pdf.context.obj({}));
+  pg.drawImage(await pdf.embedJpg(jpg),{x:cb.x,y:cb.y,width:cb.width,height:cb.height});
+  gc(pdf);return await pdf.save();
+}
+// Plusieurs enregistrements internes → une seule étape à annuler
+function squashTo(b0,o0){
+  for(let k=history.length-1;k>=0;k--)if(history[k].base===b0&&history[k].objs===o0){history.length=k+1;break}
+  $('undo').disabled=history.length===0;
+}
+const realOn=()=>$('real').checked;
+try{$('real').checked=localStorage.getItem('real')!=='0'}catch(e){}
+$('real').onchange=()=>{try{localStorage.setItem('real',$('real').checked?'1':'0')}catch(e){}};
+
+// ===== Déplacer une sélection =====
+// On détache uniquement l'élément (lettres, trait) : le fond reste en place, l'élément devient déplaçable.
+async function moveSel(){
+  const W=cv.width,H=cv.height,kd=cv.width/curVp.width;
+  let reg,bb,isMag=!!msel;
+  if(msel){reg=msel.allow;bb=msel.bb}else if(zone){const z=zinfo||(zinfo=polyMask(zone));reg=z.mk;bb=z.bb}else return;
+  const b0=base,o0=objs,mask0=msel?msel.mask:null;
+  bb=[Math.max(0,bb[0]-3),Math.max(0,bb[1]-3),Math.min(W-1,bb[2]+3),Math.min(H-1,bb[3]+3)];
+  await flattenIfTouched(bb);   // les éléments ajoutés présents dans la zone partent avec la sélection
+  // couleur du fond autour de la zone
+  const e0=Math.max(0,bb[0]-8),e1=Math.max(0,bb[1]-8),e2=Math.min(W-1,bb[2]+8),e3=Math.min(H-1,bb[3]+8),ew=e2-e0+1,eh=e3-e1+1;
+  const ed=ctx.getImageData(e0,e1,ew,eh).data,rs=[],gs=[],bs=[],ri=[],gi=[],bi=[];
+  for(let y=0;y<eh;y++)for(let x=0;x<ew;x++){const p=(e1+y)*W+e0+x,i=(y*ew+x)*4;
+    if(reg[p]){if((x+y)%2===0){ri.push(ed[i]);gi.push(ed[i+1]);bi.push(ed[i+2])}}else{rs.push(ed[i]);gs.push(ed[i+1]);bs.push(ed[i+2])}}
+  const med=a=>{a.sort((p,q)=>p-q);return a[a.length>>1]};
+  const bg=rs.length>20?[med(rs),med(gs),med(bs)]:[med(ri),med(gi),med(bi)];
+  // pixels de l'élément (différents du fond) dans la zone
+  const fg=new Uint8Array(W*H);let f0=W,f1=H,f2=-1,f3=-1;
+  for(let y=bb[1];y<=bb[3];y++)for(let x=bb[0];x<=bb[2];x++){const p=y*W+x;if(!reg[p])continue;
+    let on;
+    if(isMag)on=mask0[p];
+    else{const i=((y-e1)*ew+(x-e0))*4;on=Math.hypot(ed[i]-bg[0],ed[i+1]-bg[1],ed[i+2]-bg[2])>40}
+    if(on){fg[p]=1;if(x<f0)f0=x;if(x>f2)f2=x;if(y<f1)f1=y;if(y>f3)f3=y}}
+  if(f2<0){toast('Rien à déplacer dans cette sélection.');return}
+  const fb=[Math.max(0,f0-3),Math.max(0,f1-3),Math.min(W-1,f2+3),Math.min(H-1,f3+3)],fw=fb[2]-fb[0]+1,fh=fb[3]-fb[1]+1;
+  const lf=new Uint8Array(fw*fh),lr=new Uint8Array(fw*fh);
+  for(let y=0;y<fh;y++)for(let x=0;x<fw;x++){const p=(fb[1]+y)*W+fb[0]+x;lf[y*fw+x]=fg[p];lr[y*fw+x]=reg[p]}
+  const clip=dilate(lf,fw,fh,2);for(let i=0;i<fw*fh;i++)if(!lr[i])clip[i]=0;
+  // rendu haute définition de la zone (~290 dpi) pour que le texte déplacé reste net
+  const page=await doc.getPage(pageNo),f=Math.min(6,Math.max(1,4/(kd*scale)));
+  const vp2=page.getViewport({scale:scale*kd*f}),hw=Math.ceil(fw*f),hh=Math.ceil(fh*f);
+  const hc=document.createElement('canvas');hc.width=hw;hc.height=hh;const hx=hc.getContext('2d',{willReadFrequently:true});
+  hx.fillStyle='#fff';hx.fillRect(0,0,hw,hh);
+  await page.render({canvasContext:hx,viewport:vp2,transform:[1,0,0,1,-fb[0]*f,-fb[1]*f]}).promise;
+  const im=hx.getImageData(0,0,hw,hh),d=im.data;
+  for(let y=0;y<hh;y++)for(let x=0;x<hw;x++){
+    const i=(y*hw+x)*4,lx=Math.min(fw-1,(x/f)|0),ly=Math.min(fh-1,(y/f)|0);
+    if(!clip[ly*fw+lx]){d[i+3]=0;continue}
+    const dist=Math.hypot(d[i]-bg[0],d[i+1]-bg[1],d[i+2]-bg[2]),a=Math.min(1,Math.max(0,(dist-14)/34));
+    if(a<.04){d[i+3]=0;continue}
+    const kk=Math.max(a,.2);
+    for(let ch=0;ch<3;ch++)d[i+ch]=Math.max(0,Math.min(255,bg[ch]+(d[i+ch]-bg[ch])/kk));
+    d[i+3]=Math.round(255*a);
+  }
+  hx.putImageData(im,0,0);
+  const png=new Uint8Array(await (await new Promise(r=>hc.toBlob(r,'image/png'))).arrayBuffer());
+  const pa=curVp.convertToPdfPoint(fb[0]/kd,fb[1]/kd),pb=curVp.convertToPdfPoint((fb[2]+1)/kd,(fb[3]+1)/kd);
+  const id='i'+Date.now();
+  // on efface l'original (seulement les pixels de l'élément, et le texte réellement), puis on pose la copie au même endroit
+  await eraseMagic(fg,[f0,f1,f2,f3],reg,true);
+  const o={id,type:'img',page:pageNo-1,x:Math.min(pa[0],pb[0]),y:Math.min(pa[1],pb[1]),w:Math.abs(pb[0]-pa[0]),h:Math.abs(pb[1]-pa[1]),bytes:png};
+  await commit(base,[...objs,o]);
+  squashTo(b0,o0);
+  clearSel();if(mode)setMode(mode);
+  selectObj(id);
+  toast('Élément détaché : faites-le glisser à sa nouvelle place (ou utilisez les flèches).');
 }
 
 $('ifile').onchange=async e=>{
@@ -1122,6 +1437,8 @@ function magicTap(P){
   });
 }
 $('z-no').onclick=clearSel;
+$('z-mv').onclick=()=>{if(!(zone||msel))return;hideC();run(moveSel)};
+$('c-mv').onclick=()=>{if(!cpts)return;hideC();run(moveSel)};
 $('z-er').onclick=()=>{
   const al=allowMask();if(!al)return;
   const bb=msel?msel.bb:(zinfo||(zinfo=polyMask(zone))).bb,m=al.slice();
