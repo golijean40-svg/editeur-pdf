@@ -60,7 +60,7 @@ body:not(.ready) #dockwrap{display:none}
 body[data-mode=hl] #opts,body[data-mode=pen] #opts,body[data-mode=erase] #opts,body[data-mode=box] #opts,body[data-mode=ctr] #opts{display:flex}
 .o{display:none;align-items:center;gap:10px}
 body[data-mode=hl] .o-hl,body[data-mode=pen] .o-pen,body[data-mode=erase] .o-er,body[data-mode=box] .o-box,body[data-mode=ctr] .o-box,body[data-mode=ctr] .o-ctr{display:flex}
-#shape{height:34px;border:1px solid var(--line);border-radius:10px;background:var(--surf);color:var(--ink);font:inherit;font-size:.85rem;padding:0 8px}
+#shape,#wscope{height:34px;border:1px solid var(--line);border-radius:10px;background:var(--surf);color:var(--ink);font:inherit;font-size:.85rem;padding:0 8px}
 input[type=color]{-webkit-appearance:none;appearance:none;width:32px;height:32px;padding:0;border:2px solid var(--line);border-radius:50%;background:none;overflow:hidden;cursor:pointer}
 input[type=color]::-webkit-color-swatch-wrapper{padding:0}
 input[type=color]::-webkit-color-swatch{border:0;border-radius:50%}
@@ -79,7 +79,7 @@ input[type=range]{accent-color:var(--acc);width:130px}
 #c-er,#i-del,#z-er{color:var(--danger)}
 #zbar span{align-self:center;padding:0 10px;font-size:.84rem;color:var(--mute);white-space:nowrap}
 #zc{position:absolute;left:0;top:0;pointer-events:none;background:transparent;box-shadow:none}
-body[data-mode=mag] #opts{display:flex}body[data-mode=mag] .o-mag{display:flex}
+body[data-mode=mag] #opts{display:flex}body[data-mode=mag] .o-mag{display:flex}body[data-mode=word] #opts{display:flex}body[data-mode=word] .o-word{display:flex}
 #panel{position:fixed;left:0;right:0;bottom:0;z-index:30;display:none;max-height:72vh;overflow:auto;background:var(--surf);border-radius:22px 22px 0 0;box-shadow:0 -12px 40px -12px rgba(15,23,42,.45);padding:10px 16px calc(16px + env(safe-area-inset-bottom))}
 #panel::before{content:"";display:block;width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 12px}
 #panel .in{max-width:620px;margin:auto;display:grid;gap:10px}
@@ -109,6 +109,7 @@ body[data-mode=mag] #opts{display:flex}body[data-mode=mag] .o-mag{display:flex}
 <symbol id="i-paste" viewBox="0 0 24 24"><path d="M9 3h6v4H9zM7 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1"/></symbol>
 <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></symbol>
 <symbol id="i-wand" viewBox="0 0 24 24"><path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8 19 13M17.8 6.2 19 5M12.2 6.2 11 5M3 21l9-9M12.2 11.8 11 13"/></symbol>
+<symbol id="i-wsel" viewBox="0 0 24 24"><path d="M3 17 7 5l4 12M4.3 13h5.4M17 17a3 3 0 1 1 0-6 3 3 0 0 1 0 6zM20 11v6M3 21h18"/></symbol>
 <symbol id="i-img" viewBox="0 0 24 24"><path d="M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6M9 9.5h.01"/></symbol>
 <symbol id="i-rot" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></symbol>
 <symbol id="i-l" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
@@ -120,7 +121,7 @@ body[data-mode=mag] #opts{display:flex}body[data-mode=mag] .o-mag{display:flex}
 <symbol id="i-del" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></symbol>
 </defs></svg>
 <header class="top">
-  <div class="brand"><span class="mark"></span>Éditeur PDF<small style="font-weight:500;color:var(--mute);font-size:.7rem">v24 · suppression réelle</small></div>
+  <div class="brand"><span class="mark"></span>Éditeur PDF<small style="font-weight:500;color:var(--mute);font-size:.7rem">v25 · outil Mots</small></div>
   <button id="undo" class="ib" disabled aria-label="Annuler"><svg class="i"><use href="#i-undo"/></svg></button>
   <button id="redo" class="ib" disabled aria-label="Rétablir"><svg class="i"><use href="#i-redo"/></svg></button>
   <button id="clean" class="ib" aria-label="Aperçu propre : masque tous les repères"><svg class="i"><use href="#i-eye"/></svg></button>
@@ -143,6 +144,7 @@ body[data-mode=mag] #opts{display:flex}body[data-mode=mag] .o-mag{display:flex}
     <div class="o o-pen"><span>Stylo</span><input id="penc" type="color" value="#d92d20" aria-label="Couleur du stylo"></div>
     <div class="o o-ctr"><span>Forme</span><select id="shape" aria-label="Forme du contour"><option value="free">Libre</option><option value="rect">Rectangle</option><option value="round">Rectangle arrondi</option><option value="ellipse">Ovale</option><option value="diamond">Losange</option><option value="triangle">Triangle</option><option value="star">Étoile</option><option value="arrow">Flèche</option></select></div>
     <div class="o o-box"><span>Cadre</span><input id="boxc" type="color" value="#2447f9" aria-label="Couleur du cadre"><input id="boxw" type="range" min="1" max="6" step="0.5" value="2" aria-label="Épaisseur du cadre"></div>
+    <div class="o o-word"><span>Portée</span><select id="wscope" aria-label="Portée de la sélection"><option value="word">Un mot</option><option value="phrase">Groupe de mots</option></select></div>
     <div class="o o-mag"><span>Tolérance</span><input id="mtol" type="range" min="15" max="140" value="60" aria-label="Tolérance de couleur"><label style="display:flex;align-items:center;gap:6px"><input id="mline" type="checkbox" checked>Ignorer les traits</label></div>
     <div class="o o-er"><span>Taille</span><input id="brs" type="range" min="4" max="60" value="14" aria-label="Taille de la gomme"><label style="display:flex;align-items:center;gap:6px"><input id="real" type="checkbox" checked>Suppression réelle</label></div>
   </div>
@@ -157,6 +159,7 @@ body[data-mode=mag] #opts{display:flex}body[data-mode=mag] .o-mag{display:flex}
     <button class="tool" id="pen"><svg class="i"><use href="#i-pen"/></svg><span>Stylo</span></button>
     <button class="tool" id="box"><svg class="i"><use href="#i-box"/></svg><span>Cadre</span></button>
     <button class="tool" id="ctr"><svg class="i"><use href="#i-ctr"/></svg><span>Contour</span></button>
+    <button class="tool" id="wsel"><svg class="i"><use href="#i-wsel"/></svg><span>Mots</span></button>
     <button class="tool" id="mag"><svg class="i"><use href="#i-wand"/></svg><span>Baguette</span></button>
     <button class="tool" id="paste" disabled><svg class="i"><use href="#i-paste"/></svg><span>Coller</span></button>
     <button class="tool" id="er"><svg class="i"><use href="#i-er"/></svg><span>Gomme</span></button>
@@ -741,12 +744,13 @@ function setMode(m){
   mode=mode===m?null:m;addMode=false;$('addt').classList.remove('main');document.body.dataset.mode=mode||'';
   if(mode==='box')toast('Faites glisser pour tracer un cadre, ou touchez une ligne de texte.');
   if(mode==='ctr')toast('Dessinez une boucle autour de la zone, puis choisissez l’action.');
-  $('hl').classList.toggle('main',mode==='hl');$('pen').classList.toggle('main',mode==='pen');$('er').classList.toggle('main',mode==='erase');$('box').classList.toggle('main',mode==='box');$('ctr').classList.toggle('main',mode==='ctr');$('mag').classList.toggle('main',mode==='mag');
-  $('pc').style.pointerEvents=(mode==='pen'||mode==='erase'||mode==='box'||mode==='ctr'||mode==='mag')?'auto':'none';closePanel();
+  $('hl').classList.toggle('main',mode==='hl');$('pen').classList.toggle('main',mode==='pen');$('er').classList.toggle('main',mode==='erase');$('box').classList.toggle('main',mode==='box');$('ctr').classList.toggle('main',mode==='ctr');$('mag').classList.toggle('main',mode==='mag');$('wsel').classList.toggle('main',mode==='word');
+  $('pc').style.pointerEvents=(mode==='pen'||mode==='erase'||mode==='box'||mode==='ctr'||mode==='mag'||mode==='word')?'auto':'none';closePanel();
   if(mode==='hl')toast('Touchez une ligne pour la surligner.');
   if(mode==='pen')toast('Dessinez avec le doigt.');
   if(mode==='erase')toast((zone||msel)?'Gomme limitée à la sélection active.':'Passez le doigt sur ce que vous voulez effacer. Zoomez pour plus de précision.');
   if(mode==='mag')toast('Touchez un élément (lettre, mot, trait) pour le sélectionner.');
+  if(mode==='word')toast('Touchez une lettre : le mot est sélectionné, sans les points ni les traits.');
 }
 $('er').onclick=()=>setMode('erase');$('box').onclick=()=>setMode('box');$('ctr').onclick=()=>setMode('ctr');$('hl').onclick=()=>setMode('hl');$('pen').onclick=()=>setMode('pen');
 const highlight=l=>mutate(async pdf=>{
@@ -759,7 +763,7 @@ let em=null,eb=null;
 function cancelStroke(){pts=null;em=eb=null;pcx.clearRect(0,0,pc.width,pc.height)}
 pc.addEventListener('pointerdown',e=>{
   if(!e.isPrimary)return;   // un 2e doigt (pincement) ne démarre pas de tracé
-  if(mode!=='pen'&&mode!=='erase'&&mode!=='box'&&mode!=='ctr'&&mode!=='mag')return;
+  if(mode!=='pen'&&mode!=='erase'&&mode!=='box'&&mode!=='ctr'&&mode!=='mag'&&mode!=='word')return;
   pc.setPointerCapture(e.pointerId);pts=[pcPos(e)];
   if(mode==='ctr')hideC();
   if(mode==='erase'){em=new Uint8Array(cv.width*cv.height);eb=null;stampE(pts[0])}
@@ -774,7 +778,7 @@ function stampE(p){
 }
 pc.addEventListener('pointermove',e=>{
   if(!pts||!e.isPrimary)return;const p=pcPos(e),q=pts[pts.length-1];pts.push(p);
-  if(mode==='mag')return;
+  if(mode==='mag'||mode==='word')return;
   if(mode==='box'){drawBoxPreview(pts[0],p);return}
   if(mode==='ctr'){drawContourPreview($('shape').value==='free'?pts:shapePoly(pts[0],p,$('shape').value));return}
   if(mode==='erase'){
@@ -787,6 +791,7 @@ pc.addEventListener('pointermove',e=>{
 pc.addEventListener('pointerup',e=>{
   if(!pts||!e.isPrimary)return;const P=pts;pts=null;
   if(mode==='mag'){magicTap(P);return}
+  if(mode==='word'){wordTap(P);return}
   if(mode==='box'){finishBox(P);return}
   if(mode==='ctr'){finishContour(P,$('shape').value);return}
   if(mode==='erase'){if(eb){const m=em,b=eb;em=eb=null;run(()=>eraseSel(m,b))}return}
@@ -1446,6 +1451,130 @@ $('z-er').onclick=()=>{
   run(()=>eraseMagic(m,bb,al));
 };
 $('mag').onclick=()=>setMode('mag');
+// ----- Outil Mots : on touche une lettre, il sélectionne les lettres et chiffres voisins, sans les points ni les traits -----
+function inkMask(d,n,ref,bg,tol2){   // pixels d'encre : proches de la couleur touchée, plus proches d'elle que du fond
+  const m=new Uint8Array(n);
+  for(let p=0;p<n;p++){const i=p*4,r=d[i],g=d[i+1],b=d[i+2],dr=(r-ref[0])**2+(g-ref[1])**2+(b-ref[2])**2;
+    if(dr<tol2&&dr<(r-bg[0])**2+(g-bg[1])**2+(b-bg[2])**2)m[p]=1}
+  return m;
+}
+function labelComps(m,w,h){   // composantes connexes (8 voisins) : une lettre, un point, un trait…
+  const lab=new Int32Array(w*h),comps=[],st=[];
+  for(let s=0;s<w*h;s++){
+    if(!m[s]||lab[s])continue;
+    const id=comps.length+1,c={id,x0:w,y0:h,x1:-1,y1:-1,n:0};lab[s]=id;st.push(s);
+    while(st.length){const p=st.pop(),x=p%w,y=(p/w)|0;c.n++;
+      if(x<c.x0)c.x0=x;if(x>c.x1)c.x1=x;if(y<c.y0)c.y0=y;if(y>c.y1)c.y1=y;
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=w||ny>=h)continue;const q=ny*w+nx;if(m[q]&&!lab[q]){lab[q]=id;st.push(q)}}}
+    c.w=c.x1-c.x0+1;c.h=c.y1-c.y0+1;comps.push(c);
+  }
+  return{lab,comps};
+}
+function wordSelect(cx,cy,scope){
+  const W=cv.width,H=cv.height,k=cv.width/pc.width,R0=Math.max(6,Math.round(10*k));
+  const sc=zone?(zinfo||(zinfo=polyMask(zone))):null;
+  const med=a=>{a.sort((p,q)=>p-q);return a[a.length>>1]};
+  // 1. couleur du fond et de l'encre touchée
+  const S=Math.round(Math.max(R0*6,Math.min(W,H)*.06)),qx0=Math.max(0,cx-S),qy0=Math.max(0,cy-S),qw=Math.min(W-1,cx+S)-qx0+1,qh=Math.min(H-1,cy+S)-qy0+1;
+  const qd=ctx.getImageData(qx0,qy0,qw,qh).data,rs=[],gs=[],bs=[];
+  for(let p=0;p<qw*qh;p+=3){rs.push(qd[p*4]);gs.push(qd[p*4+1]);bs.push(qd[p*4+2])}
+  const bg=[med(rs),med(gs),med(bs)];
+  let best=-1,ref=null,sx=0,sy=0;
+  for(let y=Math.max(0,cy-R0);y<=Math.min(H-1,cy+R0);y++)for(let x=Math.max(0,cx-R0);x<=Math.min(W-1,cx+R0);x++){
+    if((x-cx)**2+(y-cy)**2>R0*R0)continue;
+    const i=((y-qy0)*qw+(x-qx0))*4,dd=(qd[i]-bg[0])**2+(qd[i+1]-bg[1])**2+(qd[i+2]-bg[2])**2;
+    if(dd>best){best=dd;ref=[qd[i],qd[i+1],qd[i+2]];sx=x;sy=y}
+  }
+  if(!ref||best<900)return{err:'Aucune lettre ici : touchez directement une lettre ou un chiffre.'};
+  const tol2=Math.max(3600,best*.35);
+  // 2. hauteur de la lettre touchée
+  const qm=inkMask(qd,qw*qh,ref,bg,tol2),ql=labelComps(qm,qw,qh),seed0=ql.comps[ql.lab[(sy-qy0)*qw+(sx-qx0)]-1];
+  if(!seed0)return{err:'Aucune lettre ici : touchez directement une lettre ou un chiffre.'};
+  // hauteur de la ligne : la plus grande lettre de la rangée (même si l'on a touché un point)
+  const row=ql.comps.filter(c=>c.y0<=seed0.y1+2&&c.y1>=seed0.y0-2&&c.w<qw*.4&&c.h<qh*.6);
+  const sh=Math.max(4,Math.min(qh/2,Math.max(seed0.h,...row.map(c=>c.h))));
+  // 3. bande horizontale autour de la ligne, sur toute la largeur de la page
+  const by0=Math.max(0,qy0+seed0.y0-Math.round(sh*1.3)),by1=Math.min(H-1,qy0+seed0.y1+Math.round(sh*1.3)),bh=by1-by0+1;
+  const bx0=sc?sc.bb[0]:0,bx1=sc?sc.bb[2]:W-1,bw=bx1-bx0+1;
+  const bd=ctx.getImageData(bx0,by0,bw,bh).data,m=inkMask(bd,bw*bh,ref,bg,tol2);
+  if(sc)for(let y=0;y<bh;y++)for(let x=0;x<bw;x++)if(!sc.mk[(by0+y)*W+bx0+x])m[y*bw+x]=0;
+  // les traits (soulignements, filets, bordures de tableau) = longues séries continues : on les retire avant tout
+  const L=Math.max(12,Math.round(sh*2.6)),ln=new Uint8Array(bw*bh);
+  for(let y=0;y<bh;y++){let s0=-1;for(let x=0;x<=bw;x++){const on=x<bw&&m[y*bw+x];if(on){if(s0<0)s0=x}else if(s0>=0){if(x-s0>=L)for(let q=s0;q<x;q++)ln[y*bw+q]=1;s0=-1}}}
+  for(let x=0;x<bw;x++){let s0=-1;for(let y=0;y<=bh;y++){const on=y<bh&&m[y*bw+x];if(on){if(s0<0)s0=y}else if(s0>=0){if(y-s0>=L)for(let q=s0;q<y;q++)ln[q*bw+x]=1;s0=-1}}}
+  const m2=m.slice();for(let i=0;i<bw*bh;i++)if(ln[i])m2[i]=0;
+  const{lab,comps}=labelComps(m2,bw,bh);
+  const seed=comps[lab[(sy-by0)*bw+(sx-bx0)]-1];
+  if(!seed)return{err:'Touchez une lettre ou un chiffre (pas un point ni un trait).'};
+  // 4. ligne de base et hauteur des lettres de la ligne
+  const rowc=comps.filter(c=>c.y1>=seed.y0-sh*.5&&c.y0<=seed.y1+sh*.5&&c.w<sh*4);
+  const hmax=Math.max(seed.h,...rowc.map(c=>c.h)),near=rowc.filter(c=>c.h>=hmax*.5);
+  const base=near.length?med(near.map(c=>c.y1)):seed.y1,Hm=Math.max(3,near.length?med(near.map(c=>c.h)):seed.h);
+  const kind=c=>{
+    if(c.w>3*Hm&&c.h<.5*Hm)return'line';
+    if(Math.max(c.w,c.h)<.42*Hm)return'dot';
+    if(c.h<.3*Hm&&c.w>=1.3*c.h)return'dash';
+    return'letter';
+  };
+  const onLine=c=>c.y0<=base-.3*Hm&&c.y1>=base-.6*Hm;
+  if(kind(seed)!=='letter')return{err:'Touchez une lettre ou un chiffre (pas un point ni un trait).'};
+  const letters=comps.filter(c=>kind(c)==='letter'&&onLine(c)).sort((a,b)=>a.x0-b.x0);
+  const smalls=comps.filter(c=>kind(c)!=='letter'&&c.y1>=base-1.6*Hm&&c.y0<=base+.6*Hm);
+  // 5. on s'étend depuis la lettre touchée : jusqu'à un espace (Mot) ou jusqu'à des points de conduite / un grand blanc (Groupe)
+  // largeur de chaque lettre mesurée dans la zone des minuscules : les jambages (j, g, p) et accents ne faussent pas les espaces
+  const yA=Math.max(0,Math.round(base-.9*Hm)),yB=Math.min(bh-1,Math.max(yA,Math.round(base-1))),byId=new Map(letters.map(c=>[c.id,c]));
+  for(const c of letters){c.cx0=Infinity;c.cx1=-1}
+  for(let y=yA;y<=yB;y++)for(let x=0;x<bw;x++){const id=lab[y*bw+x];if(!id)continue;const c=byId.get(id);if(!c)continue;if(x<c.cx0)c.cx0=x;if(x>c.cx1)c.cx1=x}
+  for(const c of letters)if(c.cx1<0){c.cx0=c.x0;c.cx1=c.x1}
+  // seuil d'espace entre mots, adapté à la police : nettement plus grand que l'écart habituel entre deux lettres
+  const lg=[];for(let i=1;i<letters.length;i++){const g=letters[i].cx0-letters[i-1].cx1;if(g>0&&g<Hm)lg.push(g)}
+  const gmed=lg.length?med(lg):.3*Hm;
+  const gapMax=scope==='phrase'?1.6*Hm:Math.min(.9*Hm,Math.max(.45*Hm,gmed*1.6));
+  const leader=(a,b)=>smalls.filter(c=>c.x0>=a&&c.x1<=b&&c.y1>=base-.35*Hm).length>=2;
+  let si=letters.indexOf(seed);if(si<0){letters.push(seed);letters.sort((a,b)=>a.x0-b.x0);si=letters.indexOf(seed)}
+  const keep=new Set([seed]);let r=seed.cx1,l=seed.cx0;
+  // plus grand blanc entre a et b, en comptant la ponctuation intermédiaire comme un appui (« 3.14 » reste un seul mot)
+  const gapBetween=(a,b)=>{let prev=a,g=0;for(const c of smalls.filter(c=>c.x0>=a&&c.x1<=b).sort((p,q)=>p.x0-q.x0)){g=Math.max(g,c.x0-prev);prev=Math.max(prev,c.x1)}return Math.max(g,b-prev)};
+  for(let i=si+1;i<letters.length;i++){const c=letters[i];if(c.cx1<=r){keep.add(c);continue}
+    if(gapBetween(r,c.cx0)>gapMax||leader(r,c.cx0))break;keep.add(c);r=Math.max(r,c.cx1)}
+  for(let i=si-1;i>=0;i--){const c=letters[i];if(c.cx0>=l){keep.add(c);continue}
+    if(gapBetween(c.cx1,l)>gapMax||leader(c.cx1,l))break;keep.add(c);l=Math.min(l,c.cx0)}
+  // accents, points des i et apostrophes : petits éléments au-dessus d'une lettre gardée
+  for(const c of smalls){
+    if(kind(c)==='line'||c.y1>base-.45*Hm)continue;
+    const mx=(c.x0+c.x1)/2;
+    for(const t of keep)if(mx>=t.x0-.25*Hm&&mx<=t.x1+.25*Hm){keep.add(c);break}
+  }
+  // 6. masques : pixels sélectionnés, et zone autorisée pour la gomme (jamais sur les points ni les traits ignorés)
+  const ids=new Set([...keep].map(c=>c.id)),sel=new Uint8Array(bw*bh),ign=new Uint8Array(bw*bh);
+  for(let i=0;i<bw*bh;i++){if(lab[i]&&ids.has(lab[i]))sel[i]=1;else if(m[i])ign[i]=1}
+  const da=dilate(sel,bw,bh,2),di=dilate(ign,bw,bh,1),mk=new Uint8Array(W*H),allow=new Uint8Array(W*H);
+  let x0=W,y0=H,x1=-1,y1=-1,n=0;
+  for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){
+    const q=y*bw+x,p=(by0+y)*W+bx0+x;
+    if(sel[q]){mk[p]=1;n++;if(bx0+x<x0)x0=bx0+x;if(bx0+x>x1)x1=bx0+x;if(by0+y<y0)y0=by0+y;if(by0+y>y1)y1=by0+y}
+    if(da[q]&&!di[q]&&(!sc||sc.mk[p]))allow[p]=1;
+  }
+  if(!n)return{err:'Aucune lettre trouvée ici.'};
+  return{mk,allow,bb:[Math.max(0,x0-2),Math.max(0,y0-2),Math.min(W-1,x1+2),Math.min(H-1,y1+2)],n,count:keep.size};
+}
+function wordTap(P){
+  const a=P[0],b=P[P.length-1];if(Math.hypot(b[0]-a[0],b[1]-a[1])>8)return;
+  run(async()=>{
+    const k=cv.width/pc.width,r=wordSelect(Math.round(a[0]*k),Math.round(a[1]*k),$('wscope').value);
+    if(r.err){toast(r.err);return}
+    if(!msel){msel={mask:r.mk,allow:r.allow,bb:r.bb}}
+    else{   // chaque appui s'ajoute à la sélection
+      const W=cv.width,o=msel;
+      for(let y=r.bb[1];y<=r.bb[3];y++)for(let x=r.bb[0];x<=r.bb[2];x++){const i=y*W+x;if(r.mk[i])o.mask[i]=1;if(r.allow[i])o.allow[i]=1}
+      o.bb=[Math.min(o.bb[0],r.bb[0]),Math.min(o.bb[1],r.bb[1]),Math.max(o.bb[2],r.bb[2]),Math.max(o.bb[3],r.bb[3])];
+    }
+    zmeta={page:pageNo,scale};buildTint();drawZone();
+    toast('Sélectionné, sans les points ni les traits. Touchez un autre mot pour l’ajouter, ou choisissez Déplacer / Effacer.');
+  });
+}
+$('wsel').onclick=()=>setMode('word');
+
 $('clean').onclick=()=>{hideI();closePanel();document.body.classList.add('clean')};$('cleanx').onclick=()=>document.body.classList.remove('clean');
 $('openbig').onclick=()=>$('file').click();
 // zoom au pincement
