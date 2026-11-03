@@ -84,6 +84,10 @@ body[data-mode=mag] #opts{display:flex}body[data-mode=mag] .o-mag{display:flex}b
 #panel::before{content:"";display:block;width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 12px}
 #panel .in{max-width:620px;margin:auto;display:grid;gap:10px}
 #info{color:var(--mute);font-size:.86rem}
+#words{display:flex;flex-wrap:wrap;gap:6px;max-height:132px;overflow:auto}
+.chip{height:36px;padding:0 12px;border:1px solid var(--line);border-radius:999px;background:var(--bg);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip.on{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+.chip.all{border-style:dashed;color:var(--mute)}
 #panel input:not([type]),#panel input[type=number],#panel select{width:100%;height:46px;padding:0 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);font:inherit}
 #panel .row{display:flex;gap:8px;align-items:center}
 #panel .row>*{flex:1;min-width:0}
@@ -121,7 +125,7 @@ body[data-mode=mag] #opts{display:flex}body[data-mode=mag] .o-mag{display:flex}b
 <symbol id="i-del" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></symbol>
 </defs></svg>
 <header class="top">
-  <div class="brand"><span class="mark"></span>Éditeur PDF<small style="font-weight:500;color:var(--mute);font-size:.7rem">v27 · polices + effacement précis</small></div>
+  <div class="brand"><span class="mark"></span>Éditeur PDF<small style="font-weight:500;color:var(--mute);font-size:.7rem">v28 · remplacement à l’identique</small></div>
   <button id="undo" class="ib" disabled aria-label="Annuler"><svg class="i"><use href="#i-undo"/></svg></button>
   <button id="redo" class="ib" disabled aria-label="Rétablir"><svg class="i"><use href="#i-redo"/></svg></button>
   <button id="clean" class="ib" aria-label="Aperçu propre : masque tous les repères"><svg class="i"><use href="#i-eye"/></svg></button>
@@ -175,6 +179,7 @@ body[data-mode=mag] #opts{display:flex}body[data-mode=mag] .o-mag{display:flex}b
 </div>
 <div id="panel"><div class="in">
   <div id="info"></div>
+  <div id="words" hidden></div>
   <input id="txt" autocomplete="off" aria-label="Nouveau texte">
   <div class="row"><select id="fnt" aria-label="Police"></select><input id="sz" type="number" min="4" max="200" step="0.5" aria-label="Taille du texte"><input id="col" type="color" aria-label="Couleur du texte"></div>
   <div class="row"><button id="more" class="btn2">Ligne suivante</button><label class="btn2">Mes polices<input id="ffile" type="file" accept=".ttf,.otf" multiple hidden></label></div>
@@ -257,7 +262,7 @@ async function render(){
   lines.forEach(l=>{
     const d=document.createElement('div');d.className='t';
     d.style.cssText=`left:${l.cx}px;top:${l.cy}px;width:${l.cw}px;height:${l.ch}px`;
-    d.onclick=()=>{if(addMode||pendingImg||pendingPaste)return;if(mode==='hl')run(()=>highlight(l));else if(!mode)choose(l,d)};L.appendChild(d);l.el=d;
+    d.onclick=e=>{if(addMode||pendingImg||pendingPaste)return;if(mode==='hl')run(()=>highlight(l));else if(!mode)choose(l,d,e)};L.appendChild(d);l.el=d;
   });
   drawObjOverlays(L,vp);
   if(zmeta&&(zmeta.page!==pageNo||Math.abs(zmeta.scale-scale)>1e-6))clearSel();else drawZone();
@@ -363,6 +368,7 @@ function sampleColors(px,py,l,dpr){
 function hex(a){return'#'+a.map(v=>Math.round(v).toString(16).padStart(2,'0')).join('')}
 function unhex(h){return[1,3,5].map(i=>parseInt(h.substr(i,2),16))}
 function showPanel(){
+  removeOrig();$('words').hidden=true;
   $('txt').value=sel.group.map(g=>g.s).join(' ');
   syncWebOption();
   $('fnt').value=sel.web?'web':sel.key;$('sz').value=Math.round(sel.size*10)/10;$('col').value=hex(sel.color);
@@ -439,9 +445,10 @@ function autoPick(){
     if(sv&&[...$('fnt').options].some(o=>o.value===sv))$('fnt').value=sv;
   }catch(e){}
 }
-function choose(l,el){
+function choose(l,el,e){
   document.querySelectorAll('.t.on').forEach(e=>e.classList.remove('on'));
-  el.classList.add('on');sel=l;sel.group=[l];showPanel();$('txt').select();
+  el.classList.add('on');l.words=null;sel=l;sel.group=[l];showPanel();$('txt').select();
+  if(e)loadWords(l,e);   // découpe la ligne en mots touchables (police d'origine)
 }
 function closePanel(){hideC();hideI();$('panel').style.display='none';sel=null;document.querySelectorAll('.t.on').forEach(e=>e.classList.remove('on'))}
 
@@ -643,6 +650,11 @@ async function apply(){
   busy=true;
   const realKey=normName(sel.real);
   const text=$('txt').value,size=parseFloat($('sz').value)||sel.size,color=unhex($('col').value),fk=$('fnt').value;
+  if(sel.words&&sel.group.length===1&&!sel.add){
+    try{await replaceWords(text,size,color,fk)}
+    catch(e){console.error(e);toast(/WinAnsi|encode/i.test(String(e.message))?'Un caractère n’est pas pris en charge par cette police : chargez « Mes polices ».':'Modification impossible : '+(e.message||e))}
+    busy=false;return;
+  }
   if(sel.add){
     try{await applyObject(text,size,color,fk,realKey)}
     catch(e){console.error(e);toast(/WinAnsi|encode/i.test(String(e.message))?'Un caractère n’est pas pris en charge par cette police : chargez « Mes polices ».':'Modification impossible : '+(e.message||e))}
@@ -666,9 +678,10 @@ async function apply(){
       }else font=await pdf.embedFont(PDFLib.StandardFonts[fk]);
       const c=a=>PDFLib.rgb(a[0]/255,a[1]/255,a[2]/255),g=sel.group;
       // l'ancien texte est retiré du fichier (pas seulement recouvert)
+      let gone=0;const need=g.reduce((a,l)=>a+l.s.replace(/\s/g,'').length,0);
       if(realOn()){const R=g.map(l=>[l.x-1.5,l.x+l.w+1.5,l.y-l.size*.28,l.y+l.size*.97]);
-        try{await redactPage(pdf,page,(x,y)=>R.some(r=>x>=r[0]&&x<=r[1]&&y>=r[2]&&y<=r[3]),()=>false)}catch(e){console.error(e)}}
-      g.forEach(l=>page.drawRectangle({x:l.x-1.5,y:l.y-l.size*0.28,width:l.w+3,height:l.size*1.25,color:c(l.bg)}));
+        try{gone=(await redactPage(pdf,page,(x,y)=>R.some(r=>x>=r[0]&&x<=r[1]&&y>=r[2]&&y<=r[3]),()=>false)).removed}catch(e){console.error(e)}}
+      if(gone<need)g.forEach(l=>page.drawRectangle({x:l.x-1.5,y:l.y-l.size*0.28,width:l.w+3,height:l.size*1.25,color:c(l.bg)}));
       if(!text.trim())return;
       const maxW=g.length===1?1e9:Math.max(...g.map(l=>l.w));
       const lead=g.length>1?g[0].y-g[1].y:size*1.2;
@@ -686,6 +699,7 @@ async function apply(){
 
 $('more').onclick=()=>{
   if(!sel||sel.add)return;
+  if(sel.words){sel.words=null;$('words').hidden=true;removeOrig();if($('fnt').value==='orig'||!$('fnt').value)$('fnt').value=sel.key}   // paragraphe : mode lignes entières
   const last=sel.group[sel.group.length-1],n=lines[lines.indexOf(last)+1];
   if(!n||Math.abs(n.x-sel.x)>sel.size*3){toast('Pas de ligne suivante dans ce paragraphe.');return}
   sel.group.push(n);n.el.classList.add('on');$('txt').value=sel.group.map(g=>g.s).join(' ');
@@ -1200,6 +1214,251 @@ function squashTo(b0,o0){
 const realOn=()=>$('real').checked;
 try{$('real').checked=localStorage.getItem('real')!=='0'}catch(e){}
 $('real').onchange=()=>{try{localStorage.setItem('real',$('real').checked?'1':'0')}catch(e){}};
+
+// ===== Remplacer un mot à l'identique =====
+// On lit les instructions de la page pour trouver chaque lettre (police, taille, couleur, position exactes).
+// Le nouveau texte est écrit avec la police d'origine du PDF, au même endroit, sans toucher au fond ;
+// les anciennes lettres sont retirées du fichier.
+const W1252=(()=>{const m=new Map();try{const td=new TextDecoder('windows-1252');for(let c=32;c<256;c++){if(c===127)continue;const s=td.decode(new Uint8Array([c]));if(s&&s!=='�')m.set(c,s)}}catch(e){for(let c=32;c<127;c++)m.set(c,String.fromCharCode(c))}return m})();
+const GN=(()=>{   // noms de glyphes courants → caractère (pour les polices avec /Differences)
+  const t={space:' ',exclam:'!',quotedbl:'"',numbersign:'#',dollar:'$',percent:'%',ampersand:'&',quotesingle:"'",parenleft:'(',parenright:')',asterisk:'*',plus:'+',comma:',',hyphen:'-',period:'.',slash:'/',colon:':',semicolon:';',less:'<',equal:'=',greater:'>',question:'?',at:'@',bracketleft:'[',backslash:'\\',bracketright:']',asciicircum:'^',underscore:'_',grave:'`',braceleft:'{',bar:'|',braceright:'}',asciitilde:'~',
+    ae:'æ',AE:'Æ',oe:'œ',OE:'Œ',oslash:'ø',Oslash:'Ø',germandbls:'ß',Euro:'€',euro:'€',endash:'–',emdash:'—',quoteright:'’',quoteleft:'‘',quotedblleft:'“',quotedblright:'”',quotesinglbase:'‚',quotedblbase:'„',ellipsis:'…',bullet:'•',guillemotleft:'«',guillemotright:'»',guilsinglleft:'‹',guilsinglright:'›',degree:'°',copyright:'©',registered:'®',trademark:'™',section:'§',paragraph:'¶',periodcentered:'·',nbspace:' ',sterling:'£',yen:'¥',cent:'¢',multiply:'×',divide:'÷',plusminus:'±',minus:'−',fi:'ﬁ',fl:'ﬂ',dagger:'†',daggerdbl:'‡',perthousand:'‰',florin:'ƒ',exclamdown:'¡',questiondown:'¿',ordfeminine:'ª',ordmasculine:'º',onehalf:'½',onequarter:'¼',threequarters:'¾',mu:'µ',eth:'ð',Eth:'Ð',thorn:'þ',Thorn:'Þ',dotlessi:'ı',
+    zero:'0',one:'1',two:'2',three:'3',four:'4',five:'5',six:'6',seven:'7',eight:'8',nine:'9'};
+  const marks={grave:'̀',acute:'́',circumflex:'̂',tilde:'̃',dieresis:'̈',ring:'̊',cedilla:'̧',caron:'̌'};
+  return n=>{
+    if(t[n]!=null)return t[n];
+    if(/^[A-Za-z]$/.test(n))return n;
+    let m=/^uni([0-9A-Fa-f]{4})$/.exec(n);if(m)return String.fromCharCode(parseInt(m[1],16));
+    m=/^([A-Za-z])(grave|acute|circumflex|tilde|dieresis|ring|cedilla|caron)$/.exec(n);if(m)return(m[1]+marks[m[2]]).normalize('NFC');
+    return null;
+  };
+})();
+function parseToUnicode(txt){
+  const map=new Map(),dst=h=>{h=h.replace(/\s/g,'');if(h.length<4)return String.fromCharCode(parseInt(h||'0',16));let s='';for(let i=0;i+4<=h.length;i+=4)s+=String.fromCharCode(parseInt(h.substr(i,4),16));return s};
+  for(const b of txt.matchAll(/beginbfchar([\s\S]*?)endbfchar/g))for(const m of b[1].matchAll(/<([0-9a-fA-F\s]+)>\s*<([0-9a-fA-F\s]*)>/g))map.set(parseInt(m[1].replace(/\s/g,''),16),dst(m[2]));
+  for(const b of txt.matchAll(/beginbfrange([\s\S]*?)endbfrange/g)){
+    const re=/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*(<[0-9a-fA-F\s]*>|\[[^\]]*\])/g;let m;
+    while((m=re.exec(b[1]))){const lo=parseInt(m[1],16),hi=parseInt(m[2],16);if(hi<lo||hi-lo>65535)continue;
+      if(m[3][0]==='['){const a=[...m[3].matchAll(/<([0-9a-fA-F\s]*)>/g)].map(x=>dst(x[1]));for(let c=lo;c<=hi&&c-lo<a.length;c++)map.set(c,a[c-lo])}
+      else{const s0=dst(m[3].slice(1,-1));if(!s0)continue;for(let c=lo;c<=hi;c++)map.set(c,s0.slice(0,-1)+String.fromCharCode(s0.charCodeAt(s0.length-1)+(c-lo)))}}
+  }
+  return map;
+}
+const encCache=new WeakMap();
+async function fontEnc(fd){
+  if(encCache.has(fd))return encCache.get(fd);
+  let r=null;
+  try{
+    const info=await fontInfo(fd),st=pnm(fd.lookup(N('Subtype'))),base=pnm(fd.lookup(N('BaseFont'))).slice(1);
+    const subset=/^[A-Z]{6}\+/.test(base);
+    let desc=fd.lookup(N('FontDescriptor'));
+    if(info.two){const da=fd.lookup(N('DescendantFonts'));const d0=da&&da.lookup?da.lookup(0):null;desc=d0&&d0.lookup?d0.lookup(N('FontDescriptor')):null}
+    const embedded=!!(desc&&desc.lookup&&(desc.lookup(N('FontFile'))||desc.lookup(N('FontFile2'))||desc.lookup(N('FontFile3'))));
+    let tu=new Map();const tus=fd.lookup(N('ToUnicode'));
+    if(tus instanceof PDFLib.PDFStream){try{tu=parseToUnicode(u8s(streamBytes(tus)))}catch(e){}}
+    // table de l'encodage (polices simples) : WinAnsi + /Differences
+    let tab=new Map();
+    if(!info.two){
+      tab=new Map(W1252);
+      const e=fd.lookup(N('Encoding'));
+      const d=e instanceof PDFLib.PDFDict?e.lookup(N('Differences')):null;
+      if(d&&d.size){let c=0;for(let i=0;i<d.size();i++){const v=d.lookup(i);if(v instanceof PDFLib.PDFNumber)c=v.asNumber();else{const ch=GN(pnm(v).slice(1));if(ch)tab.set(c,ch);else tab.delete(c);c++}}}
+    }
+    const fc=pnv(fd.lookup(N('FirstChar'))),wa=fd.lookup(N('Widths'));
+    const hasW=c=>{if(!wa||!wa.size)return true;const v=wa.lookup(c-fc);return!!(v&&pnv(v)>0)};
+    const used=new Set(),dec=c=>tu.has(c)?tu.get(c):info.two?'�':(tab.get(c)||'�');
+    const rev=new Map();
+    for(const[c,s]of tu)if(s.length===1&&!rev.has(s))rev.set(s,c);
+    if(!info.two)for(const[c,s]of tab)if(!rev.has(s))rev.set(s,c);
+    const ok=st!=='/Type3'&&(!info.two||/^\/Identity-[HV]$/.test(pnm(fd.lookup(N('Encoding')))));
+    // un caractère n'est utilisable que si son dessin est sûrement présent dans la police
+    const allowed=c=>{
+      if(c==null||(info.two&&c===0))return false;
+      if(info.two)return tu.has(c);
+      if(!embedded)return true;   // police standard non intégrée : le lecteur a tous les caractères
+      if(subset)return tu.has(c)||used.has(c);
+      return hasW(c);
+    };
+    r={...info,ok,subset,dec,rev,used,allowed,name:base.replace(/^[A-Z]{6}\+/,'')};
+  }catch(e){console.error(e)}
+  encCache.set(fd,r);return r;
+}
+function pageSrc(pg){
+  const raw=pg.node.lookup(N('Contents')),streams=[];
+  if(raw instanceof PDFLib.PDFArray){for(let i=0;i<raw.size();i++){const s=raw.lookup(i);if(s instanceof PDFLib.PDFStream)streams.push(s)}}
+  else if(raw instanceof PDFLib.PDFStream)streams.push(raw);
+  return streams.map(s=>u8s(streamBytes(s))).join('\n');
+}
+const escName=n=>n.replace(/[^\x21-\x7e]|[#()<>\[\]{}\/%]/g,c=>'#'+c.charCodeAt(0).toString(16).padStart(2,'0'));
+// Parcourt le texte de la page ; onShow(op) peut renvoyer un texte de remplacement pour cette instruction.
+async function walkText(src,res,onShow){
+  const ops=lexPdf(src),fontRes=res&&res.lookup?res.lookup(N('Font')):null;
+  let gs={ctm:ID6,Tc:0,Tw:0,Th:1,TL:0,fi:null,fname:null,Tfs:0,Ts:0,Tr:0,fill:[0,0,0],fillSrc:null,csSrc:''},Tm=ID6,Tlm=ID6,sid=0;
+  const stack=[],edits=[];
+  for(const o of ops){
+    const a=o.args,nu=k=>a[k]&&a[k].t==='#'?a[k].v:0,nums=()=>a.filter(x=>x.t==='#').map(x=>x.v),txt=src.slice(o.s,o.e);
+    switch(o.op){
+      case'q':stack.push({...gs});break;
+      case'Q':if(stack.length)gs=stack.pop();break;
+      case'cm':gs.ctm=mul([nu(0),nu(1),nu(2),nu(3),nu(4),nu(5)],gs.ctm);break;
+      case'BT':Tm=Tlm=ID6;break;
+      case'Tc':gs.Tc=nu(0);break;case'Tw':gs.Tw=nu(0);break;case'Tz':gs.Th=nu(0)/100;break;case'TL':gs.TL=nu(0);break;case'Ts':gs.Ts=nu(0);break;case'Tr':gs.Tr=nu(0);break;
+      case'Tf':{gs.fname=a[0]&&a[0].t==='n'?a[0].v:null;gs.Tfs=nu(1);let fd=null;if(gs.fname&&fontRes&&fontRes.lookup)fd=fontRes.lookup(N(gs.fname));gs.fi=fd instanceof PDFLib.PDFDict?await fontEnc(fd):null;break}
+      case'Td':Tlm=mul([1,0,0,1,nu(0),nu(1)],Tlm);Tm=Tlm;break;
+      case'TD':gs.TL=-nu(1);Tlm=mul([1,0,0,1,nu(0),nu(1)],Tlm);Tm=Tlm;break;
+      case'Tm':Tlm=Tm=[nu(0),nu(1),nu(2),nu(3),nu(4),nu(5)];break;
+      case'T*':Tlm=mul([1,0,0,1,0,-gs.TL],Tlm);Tm=Tlm;break;
+      case'g':{const v=nu(0);gs.fill=[v,v,v];gs.fillSrc=txt;gs.csSrc='';break}
+      case'rg':gs.fill=[nu(0),nu(1),nu(2)];gs.fillSrc=txt;gs.csSrc='';break;
+      case'k':{const[c,m,y,k]=[nu(0),nu(1),nu(2),nu(3)];gs.fill=[(1-c)*(1-k),(1-m)*(1-k),(1-y)*(1-k)];gs.fillSrc=txt;gs.csSrc='';break}
+      case'cs':gs.csSrc=txt;gs.fillSrc=null;gs.fill=[0,0,0];break;
+      case'sc':case'scn':{const v=nums();if(v.length===1)gs.fill=[v[0],v[0],v[0]];else if(v.length===3)gs.fill=v;else if(v.length===4)gs.fill=[(1-v[0])*(1-v[3]),(1-v[1])*(1-v[3]),(1-v[2])*(1-v[3])];gs.fillSrc=txt;break}
+      case"'":case'"':case'Tj':case'TJ':{
+        let pre='';
+        if(o.op==='"'){gs.Tw=nu(0);gs.Tc=nu(1);pre=fmt(nu(0))+' Tw '+fmt(nu(1))+' Tc '}
+        if(o.op==="'"||o.op==='"'){Tlm=mul([1,0,0,1,0,-gs.TL],Tlm);Tm=Tlm;pre+='T* '}
+        const items=o.op==='TJ'?(a[0]&&a[0].t==='a'?a[0].v:[]):[a[a.length-1]||{t:'s',v:''}];
+        const f=gs.fi,two=!!(f&&f.two),el=[];let k=0;
+        for(const it of items){
+          if(it.t==='#'){el.push({t:'n',v:it.v});Tm=mul([1,0,0,1,-it.v/1000*gs.Tfs*gs.Th,0],Tm);continue}
+          if(it.t!=='s')continue;
+          for(let j=0;j<it.v.length;j+=two?2:1){
+            const code=two?(it.v.charCodeAt(j)<<8)|(it.v.charCodeAt(j+1)||0):it.v.charCodeAt(j),bytes=two?it.v.substr(j,2):it.v[j];
+            const w0=f?f.w(code):.5,tx=(w0*gs.Tfs+gs.Tc+(!two&&code===32?gs.Tw:0))*gs.Th;
+            const T=mul([gs.Tfs*gs.Th,0,0,gs.Tfs,0,gs.Ts],mul(Tm,gs.ctm)),[x0,y]=ap(T,0,0),[x1]=ap(T,Math.max(w0,0),0);
+            el.push({t:'g',k:k++,code,bytes,tx,x0,x1,y,size:Math.hypot(T[2],T[3]),flat:Math.abs(T[1])<1e-6*Math.abs(T[0])&&Math.abs(T[2])<1e-6*Math.abs(T[3])&&T[0]>0});
+            if(f)f.used.add(code);
+            Tm=mul([1,0,0,1,tx,0],Tm);
+          }
+        }
+        const r=await onShow({sid:sid++,el,pre,gs});
+        if(r!=null)edits.push({s:o.s,e:o.e,txt:r});
+        break}
+    }
+  }
+  if(!edits.length)return null;
+  let out='',p=0;for(const ed of edits){out+=src.slice(p,ed.s)+' '+ed.txt+' ';p=ed.e}
+  return out+src.slice(p);
+}
+let scanCache=null;
+async function scanPage(b,pi){
+  if(scanCache&&scanCache.b===b&&scanCache.pi===pi)return scanCache.gl;
+  const pdf=await PDFLib.PDFDocument.load(b,{ignoreEncryption:true}),pg=pdf.getPages()[pi],gl=[];
+  await walkText(pageSrc(pg),pg.node.Resources(),({sid,el,gs})=>{
+    for(const e of el)if(e.t==='g'&&e.flat&&gs.Tr!==3&&gs.fi)
+      gl.push({sid,k:e.k,code:e.code,ch:gs.fi.dec(e.code),x0:e.x0,x1:e.x1,y:e.y,size:e.size,fi:gs.fi,Tfs:gs.Tfs,fill:gs.fill.slice()});
+    return null;
+  });
+  scanCache={b,pi,gl};return gl;
+}
+const removeOrig=()=>{const o=[...$('fnt').options].find(o=>o.value==='orig');if(o)o.remove()};
+async function loadWords(l,e){
+  const r=$('layer').getBoundingClientRect(),[px]=curVp.convertToPdfPoint(e.clientX-r.left,e.clientY-r.top);
+  let gl;try{gl=await scanPage(base,pageNo-1)}catch(err){console.error(err);return}
+  if(sel!==l||l.group.length>1)return;
+  const on=gl.filter(g=>Math.abs(g.y-l.y)<l.size*.4&&g.x1>l.x-l.size*.3&&g.x0<l.x+l.w+l.size*.3).sort((a,b)=>a.x0-b.x0);
+  if(!on.length)return;
+  if(on.filter(g=>g.ch==='�').length>on.length*.2)return;   // lettres illisibles : ancien mode (ligne entière)
+  const words=[];let cur=null,prev=null;const gaps=[];
+  for(const g of on){
+    if(!g.ch.trim()){cur=null;prev=g;continue}
+    const gap=prev?g.x0-prev.x1:0;
+    if(!cur||!prev.ch.trim()||gap>g.size*.1){if(cur&&prev)gaps.push(g.x0-cur.glyphs[cur.glyphs.length-1].x1);cur={glyphs:[]};words.push(cur)}
+    cur.glyphs.push(g);prev=g;
+  }
+  if(!words.length)return;
+  words.forEach(w=>{w.text=w.glyphs.map(g=>g.ch).join('');w.x0=w.glyphs[0].x0;w.x1=w.glyphs[w.glyphs.length-1].x1});
+  let wi=words.findIndex(w=>px>=w.x0-1&&px<=w.x1+1);
+  if(wi<0){let bd=1e9;words.forEach((w,i)=>{const d=Math.min(Math.abs(px-w.x0),Math.abs(px-w.x1));if(d<bd){bd=d;wi=i}})}
+  gaps.sort((a,b)=>a-b);
+  l.line=on;l.words=words;l.wa=l.wb=l.anchor=wi;l.wordGap=gaps.length?gaps[gaps.length>>1]:null;
+  removeOrig();
+  const o=document.createElement('option');o.value='orig';o.textContent='Police : d’origine du PDF (identique)';$('fnt').insertBefore(o,$('fnt').firstChild);
+  syncWords(true);
+}
+function syncWords(first){
+  const c=$('words');c.innerHTML='';
+  if(!sel||!sel.words){c.hidden=true;return}
+  c.hidden=false;
+  sel.words.forEach((w,i)=>{const b=document.createElement('button');b.type='button';b.className='chip'+(i>=sel.wa&&i<=sel.wb?' on':'');b.textContent=w.text;b.onclick=()=>pickWord(i);c.appendChild(b)});
+  const all=document.createElement('button');all.type='button';all.className='chip all';all.textContent='Toute la ligne';
+  all.onclick=()=>{sel.wa=0;sel.wb=sel.words.length-1;sel.anchor=null;syncWords()};c.appendChild(all);
+  const W=sel.words.slice(sel.wa,sel.wb+1),g0=W[0].glyphs[0];
+  $('txt').value=W.map(w=>w.text).join(' ');
+  sel.orig={size:Math.round(g0.size*10)/10,col:hex(g0.fill.map(v=>Math.max(0,Math.min(1,v))*255))};
+  $('fnt').value='orig';$('sz').value=sel.orig.size;$('col').value=sel.orig.col;
+  $('info').textContent='Touchez un mot, puis un autre pour sélectionner un groupe · police d’origine : '+(g0.fi.name||'inconnue')+' · '+sel.orig.size+' pt';
+  if(!first)$('txt').focus();
+}
+function pickWord(i){
+  if(sel.anchor!=null&&sel.wa===sel.wb&&i!==sel.anchor){sel.wa=Math.min(i,sel.anchor);sel.wb=Math.max(i,sel.anchor);sel.anchor=null}
+  else{sel.wa=sel.wb=sel.anchor=i}
+  syncWords();
+}
+async function embedChoice(pdf,fk,l){   // police choisie dans le menu (hors police d'origine)
+  if(fk==='custom'&&customFont){pdf.registerFontkit(fontkit);return pdf.embedFont(customFont.bytes,{subset:true})}
+  if(fk.startsWith('loc:')){const b=await localFontBytes(fk.slice(4));if(b){pdf.registerFontkit(fontkit);return pdf.embedFont(b,{subset:true})}}
+  if(fk==='web'||fk.startsWith('web:')){const b=await webFontBytes(fk==='web'?l.web:{id:fk.slice(4)},l.bold,l.ital);if(b){pdf.registerFontkit(fontkit);return pdf.embedFont(b,{subset:true})}}
+  return pdf.embedFont(PDFLib.StandardFonts[PDFLib.StandardFonts[fk]?fk:(l.key||'Helvetica')]);
+}
+async function replaceWords(text,size,color,fk){
+  const l=sel,W=l.words.slice(l.wa,l.wb+1),xa=W[0].x0-.01,xb=W[W.length-1].x1+.01;
+  const gl=l.line.filter(g=>g.x0>=xa&&g.x1<=xb),first=W[0].glyphs[0],fi=first.fi;
+  const ids=new Set(gl.map(g=>g.sid+':'+g.k)),fkey=first.sid+':'+first.k;
+  const nt=text.normalize('NFC');
+  let same=fk==='orig',missing=[];
+  if(same){
+    if(!fi.ok)same=false;
+    else for(const ch of nt){if(ch===' ')continue;if(!fi.allowed(fi.rev.get(ch))&&!missing.includes(ch))missing.push(ch)}
+    if(missing.length)same=false;
+  }
+  let newW=0,warn='';
+  await mutate(async pdf=>{
+    const pg=pdf.getPages()[pageNo-1];
+    let font=null;
+    if(!same&&nt.trim()){   // police d'origine impossible : police choisie (ou la plus proche), même endroit, même taille
+      const f2=fk==='orig'?(localFor(l.real,l.bold)?'loc:'+localFor(l.real,l.bold).id:l.web?'web':l.key):fk;
+      font=await embedChoice(pdf,f2,l);newW=font.widthOfTextAtSize(nt,size);
+    }
+    const out=await walkText(pageSrc(pg),pg.node.Resources(),({sid,el,pre,gs})=>{
+      const sc=gs.Tfs*gs.Th;if(!sc)return null;
+      const sel1=e=>e.t==='g'&&ids.has(sid+':'+e.k);
+      if(!el.some(sel1))return null;
+      const tj=arr=>arr.length?'['+arr.map(e=>e.t==='g'?'<'+hexOf(e.bytes)+'>':fmt(e.v)).join(' ')+'] TJ':'';
+      const iF=el.findIndex(e=>e.t==='g'&&sid+':'+e.k===fkey);
+      if(iF<0)return pre+tj(el.map(e=>sel1(e)?{t:'n',v:-e.tx/sc*1000}:e));   // autre morceau de la sélection : retiré, positions gardées
+      let iL=iF;el.forEach((e,i)=>{if(sel1(e))iL=i});
+      const A=el.slice(0,iF),C=el.slice(iL+1),ms=first.size/gs.Tfs;
+      // la suite de cette instruction se recale juste après le nouveau texte (comme dans un traitement de texte)
+      if(!same||!nt.trim())return pre+tj([...A,...(newW?[{t:'n',v:-(newW/ms)/sc*1000}]:[]),...C]);
+      const k=size/first.size,Tf2=gs.Tfs*k,sc2=Tf2*gs.Th,NEW=[];let adv=0;
+      const spc=fi.rev.get(' ');
+      const spaceAdv=(fi.allowed(spc)?fi.w(spc)*Tf2+gs.Tc+(!fi.two?gs.Tw:0):(l.wordGap?l.wordGap/ms*k:.27*Tf2)+gs.Tc)*gs.Th;
+      for(const ch of nt){
+        if(ch===' '&&!fi.allowed(spc)){NEW.push({t:'n',v:-spaceAdv/sc2*1000});adv+=spaceAdv;continue}
+        const code=fi.rev.get(ch),bytes=fi.two?String.fromCharCode(code>>8,code&255):String.fromCharCode(code);
+        NEW.push({t:'g',bytes});adv+=(fi.w(code)*Tf2+gs.Tc+(!fi.two&&code===32?gs.Tw:0))*gs.Th;
+      }
+      newW=adv*ms;
+      const col=hex(color)!==l.orig.col,sz=Math.abs(k-1)>1e-3,fn='/'+escName(gs.fname);
+      let s=pre+tj(A);
+      if(col)s+=' '+color.map(v=>fmt(v/255)).join(' ')+' rg';
+      if(sz)s+=' '+fn+' '+fmt(Tf2)+' Tf';
+      s+=' '+tj(NEW);
+      if(sz)s+=' '+fn+' '+fmt(gs.Tfs)+' Tf';
+      if(col)s+=' '+(gs.csSrc||'')+' '+(gs.fillSrc||(gs.csSrc?'':'0 g'));
+      return s+' '+tj(C);
+    });
+    if(out!==null){const ref=pdf.context.register(pdf.context.flateStream(su8(out)));pg.node.set(N('Contents'),pdf.context.obj([ref]))}
+    if(font)pg.drawText(nt,{x:first.x0,y:first.y,size,font,color:PDFLib.rgb(color[0]/255,color[1]/255,color[2]/255)});
+  });
+  // texte placé indépendamment après la sélection (il ne se recale pas) : prévenir s'il est recouvert
+  const after=l.line.find(g=>g.x0>=xb&&g.ch.trim()&&g.sid!==first.sid);
+  if(after&&first.x0+newW>after.x0+.5)warn=' Attention : le nouveau texte est plus long et touche la suite de la ligne.';
+  if(same)toast('✓ Remplacé à l’identique, avec la police d’origine.'+warn);
+  else if(missing.length)toast('La police d’origine ne contient pas « '+missing.join(' ')+' » : police la plus proche utilisée.'+warn);
+  else if(warn)toast(warn.trim());
+}
 
 // ===== Déplacer une sélection =====
 // On détache uniquement l'élément (lettres, trait) : le fond reste en place, l'élément devient déplaçable.
