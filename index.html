@@ -121,7 +121,7 @@ body[data-mode=mag] #opts{display:flex}body[data-mode=mag] .o-mag{display:flex}b
 <symbol id="i-del" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></symbol>
 </defs></svg>
 <header class="top">
-  <div class="brand"><span class="mark"></span>Éditeur PDF<small style="font-weight:500;color:var(--mute);font-size:.7rem">v25 · outil Mots</small></div>
+  <div class="brand"><span class="mark"></span>Éditeur PDF<small style="font-weight:500;color:var(--mute);font-size:.7rem">v27 · polices + effacement précis</small></div>
   <button id="undo" class="ib" disabled aria-label="Annuler"><svg class="i"><use href="#i-undo"/></svg></button>
   <button id="redo" class="ib" disabled aria-label="Rétablir"><svg class="i"><use href="#i-redo"/></svg></button>
   <button id="clean" class="ib" aria-label="Aperçu propre : masque tous les repères"><svg class="i"><use href="#i-eye"/></svg></button>
@@ -189,6 +189,21 @@ const MAX_HISTORY=30;   // chaque étape garde un PDF complet : au-delà, la mé
 let customFont=null,curVp,addMode=false,zoom=1,bytes=null,base=null,objs=[],odoc=null,selId=null,history=[],redo=[],doc=null,pageNo=1,scale=1,sel=null,lines=[],busy=false,fileName='document';
 const FONTS=[['Helvetica','Sans-serif'],['HelveticaBold','Sans-serif gras'],['HelveticaOblique','Sans-serif italique'],['HelveticaBoldOblique','Sans-serif gras italique'],['TimesRoman','Serif'],['TimesRomanBold','Serif gras'],['TimesRomanItalic','Serif italique'],['TimesRomanBoldItalic','Serif gras italique'],['Courier','Machine à écrire'],['CourierBold','Machine à écrire gras'],['CourierOblique','Machine à écrire italique'],['CourierBoldOblique','Machine à écrire gras italique']];
 FONTS.forEach(([k,n])=>{const o=document.createElement('option');o.value=k;o.textContent='Police : '+n;$('fnt').appendChild(o)});
+// Polices intégrées à l'appli (fichiers à côté d'index.html) : toujours proposées, et choisies d'office quand le PDF les utilise.
+const LOCAL=[
+  {id:'courier-new',label:'Courier New',file:'courier-new.ttf',re:/^couriernew/,bold:false},
+  {id:'courier-new-bold',label:'Courier New gras',file:'courier-new-bold.ttf',re:/^couriernew/,bold:true}
+];
+LOCAL.slice().reverse().forEach(f=>{const o=document.createElement('option');o.value='loc:'+f.id;o.textContent='Police : '+f.label;$('fnt').insertBefore(o,$('fnt').firstChild)});
+const lcache={};
+async function localFontBytes(id){
+  const f=LOCAL.find(x=>x.id===id);if(!f)return null;if(lcache[id])return lcache[id];
+  try{const r=await fetch(f.file);if(!r.ok)return null;return lcache[id]=new Uint8Array(await r.arrayBuffer())}catch(e){return null}
+}
+function localFor(name,bold){   // police intégrée correspondant au nom de police du PDF (gras si besoin)
+  const n=(name||'').toLowerCase().replace(/^[a-z]{6}\+/,'').replace(/[^a-z0-9]/g,''),c=LOCAL.filter(f=>f.re.test(n));
+  return c.find(f=>f.bold===!!bold)||c[0]||null;
+}
 const cv=$('cv'),ctx=cv.getContext('2d',{willReadFrequently:true});
 const ocv=document.createElement('canvas'),octx=ocv.getContext('2d',{willReadFrequently:true});
 
@@ -351,6 +366,7 @@ function showPanel(){
   $('txt').value=sel.group.map(g=>g.s).join(' ');
   syncWebOption();
   $('fnt').value=sel.web?'web':sel.key;$('sz').value=Math.round(sel.size*10)/10;$('col').value=hex(sel.color);
+  {const lf=localFor(sel.real,sel.bold);if(lf)$('fnt').value='loc:'+lf.id}   // police intégrée exacte : prioritaire
   setInfo();
   $('more').style.display=sel.add?'none':'';$('delobj').hidden=!sel.objId;
   $('panel').style.display='block';$('txt').focus();
@@ -358,7 +374,7 @@ function showPanel(){
   probeWeb(sel);
 }
 function setInfo(){
-  $('info').textContent=sel.objId?'Texte ajouté · glissez-le sur la page pour le déplacer':sel.add?'Nouveau texte'+(normName(sel.real)?' · police du texte voisin : '+sel.real:''):'Police d’origine : '+(sel.real&&!/^g_d/.test(sel.real)?sel.real:'inconnue')+' · '+Math.round(sel.size*10)/10+' pt'+(sel.web?'':' · remplacée par : '+sel.fontLabel);
+  $('info').textContent=sel.objId?'Texte ajouté · glissez-le sur la page pour le déplacer':sel.add?'Nouveau texte'+(normName(sel.real)?' · police du texte voisin : '+sel.real:''):'Police d’origine : '+(sel.real&&!/^g_d/.test(sel.real)?sel.real:'inconnue')+' · '+Math.round(sel.size*10)/10+' pt'+(localFor(sel.real,sel.bold)?' · police intégrée : '+localFor(sel.real,sel.bold).label:sel.web?'':' · remplacée par : '+sel.fontLabel);
 }
 function syncWebOption(){
   [...$('fnt').options].filter(o=>o.value==='web'||o.value.startsWith('web:')).forEach(o=>o.remove());
@@ -486,6 +502,7 @@ async function applyObject(text,size,color,fk,realKey){
   if(!text.trim()){if(old)await commit(base,objs.filter(q=>q.id!==old));else closePanel();return}
   let fb=null,std=b0.std;
   if(fk==='custom')fb=customFont?customFont.bytes:null;
+  else if(fk.startsWith('loc:')){fb=await localFontBytes(fk.slice(4));if(!fb)toast('Police intégrée introuvable : police proche utilisée.')}
   else if(fk==='web'||fk.startsWith('web:')){
     fb=await webFontBytes(fk==='web'?b0.web:{id:fk.slice(4)},b0.bold,b0.ital);
     if(!fb)toast('Police exacte indisponible (connexion ?) : police proche utilisée.');
@@ -637,6 +654,11 @@ async function apply(){
       const page=pdf.getPages()[pageNo-1];
       let font;
       if(fk==='custom'){pdf.registerFontkit(fontkit);font=await pdf.embedFont(customFont.bytes,{subset:true})}
+      else if(fk.startsWith('loc:')){
+        const lb=await localFontBytes(fk.slice(4));
+        if(lb){pdf.registerFontkit(fontkit);font=await pdf.embedFont(lb,{subset:true})}
+        else{toast('Police intégrée introuvable : police proche utilisée.');font=await pdf.embedFont(PDFLib.StandardFonts[sel.key])}
+      }
       else if(fk==='web'||fk.startsWith('web:')){
         const wb=await webFontBytes(fk==='web'?sel.web:{id:fk.slice(4)},sel.bold,sel.ital);
         if(wb){pdf.registerFontkit(fontkit);font=await pdf.embedFont(wb,{subset:true})}
@@ -898,8 +920,29 @@ async function eraseMagic(mk,b,allow,quiet){
   // zone réellement gommée, à l'échelle de la page : sert à retrouver ce qui se trouvait dessous
   const fm=new Uint8Array(W*H),kd=cv.width/curVp.width;
   for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(op[y*w+x])fm[(y0+y)*W+x0+x]=1;
-  const hit=(px,py)=>{const[vx,vy]=curVp.convertToViewportPoint(px,py),X=Math.floor(vx*kd),Y=Math.floor(vy*kd);return X>=0&&Y>=0&&X<W&&Y<H&&fm[Y*W+X]===1};
   const gx0=x0+ax0,gy0=y0+ay0,gx1=x0+ax1,gy1=y0+ay1;
+  const hit=(px,py)=>{const[vx,vy]=curVp.convertToViewportPoint(px,py),X=Math.floor(vx*kd),Y=Math.floor(vy*kd);return X>=0&&Y>=0&&X<W&&Y<H&&fm[Y*W+X]===1};
+  // Part de l'encre réelle d'un caractère (cellule donnée par 4 coins en unités PDF) qui a été effacée.
+  // Mesurée sur la page d'origine : un « o » dont tout le contour est effacé compte pour 100 %,
+  // un point collé au mot mais laissé en place compte pour 0 %. Renvoie -1 si la cellule n'a pas d'encre (espace).
+  const pad=40,lx0=Math.max(0,gx0-pad),ly0=Math.max(0,gy0-pad),lw=Math.min(W-1,gx1+pad)-lx0+1,lh=Math.min(H-1,gy1+pad)-ly0+1;
+  const orig=ctx.getImageData(lx0,ly0,lw,lh).data;
+  const cellRatio=P=>{
+    const Q=P.map(([x,y])=>{const[vx,vy]=curVp.convertToViewportPoint(x,y);return[vx*kd,vy*kd]});
+    let a0=Math.floor(Math.min(...Q.map(q=>q[0]))),a1=Math.ceil(Math.max(...Q.map(q=>q[0]))),b0=Math.floor(Math.min(...Q.map(q=>q[1]))),b1=Math.ceil(Math.max(...Q.map(q=>q[1])));
+    if(a1<gx0||a0>gx1||b1<gy0||b0>gy1)return 0;   // loin de la zone effacée
+    a0=Math.max(a0,lx0);a1=Math.min(a1,lx0+lw-1);b0=Math.max(b0,ly0);b1=Math.min(b1,ly0+lh-1);
+    const rs=[],gs=[],bs=[];
+    for(let y=b0;y<=b1;y+=2)for(let x=a0;x<=a1;x+=2){const i=((y-ly0)*lw+(x-lx0))*4;rs.push(orig[i]);gs.push(orig[i+1]);bs.push(orig[i+2])}
+    if(!rs.length)return 0;
+    const md=a=>{a.sort((p,q)=>p-q);return a[a.length>>1]},bg=[md(rs),md(gs),md(bs)];
+    let ink=0,gone=0;
+    for(let y=b0;y<=b1;y++)for(let x=a0;x<=a1;x++){const i=((y-ly0)*lw+(x-lx0))*4;
+      if(Math.hypot(orig[i]-bg[0],orig[i+1]-bg[1],orig[i+2]-bg[2])>60){ink++;if(fm[y*W+x])gone++}}
+    return ink<3?-1:gone/ink;
+  };
+  hit.glyph=(T,wu)=>{const r=cellRatio([ap(T,0,-.2),ap(T,wu,-.2),ap(T,0,.8),ap(T,wu,.8)]);return r<0?hit(...ap(T,wu*.5,.3)):r>=.5};
+  hit.cell=cellRatio;
   const imgHit=M=>{   // une image (carré unité transformé par M) recouvre-t-elle la zone gommée ?
     const P=[[0,0],[1,0],[0,1],[1,1]].map(([u,v])=>{const[vx,vy]=curVp.convertToViewportPoint(...ap(M,u,v));return[vx*kd,vy*kd]});
     const a0=Math.max(gx0,Math.floor(Math.min(...P.map(p=>p[0])))),a1=Math.min(gx1,Math.ceil(Math.max(...P.map(p=>p[0]))));
@@ -1050,7 +1093,8 @@ async function processContent(pdf,src,res,ctm0,hit,imgHit,rep,depth){
             let del=false;
             if(f&&sc){
               const T=mul([sc,0,0,gs.Tfs,0,gs.Ts],mul(Tm,gs.ctm)),wu=Math.max(w0,.05);
-              if(hit(...ap(T,wu*.5,.3)))del=true;
+              if(hit.glyph)del=hit.glyph(T,wu);   // gomme / sélection : selon l'encre réellement effacée
+              else if(hit(...ap(T,wu*.5,.3)))del=true;
               else{let c=0;for(const u of[.2,.5,.8])for(const v of[.05,.3,.55])if(hit(...ap(T,wu*u,v)))c++;del=c>=5}
             }
             if(del){pN(-tx/sc*1000);removed++}else pS(bytes);
@@ -1124,7 +1168,10 @@ async function leftoverText(nb,pi,hit){
       for(let k=0;k<s.length;k++){
         if(!s[k].trim())continue;
         const c=(k+.5)*cw;
-        if([c-cw*.35,c,c+cw*.35].every(u=>hit(t[4]+dx*u+px*.3*sz,t[5]+dy*u+py*.3*sz)))return true;
+        if(hit.cell){   // même règle que la suppression : l'essentiel de l'encre de ce caractère a été effacé
+          const u0=k*cw,u1=(k+1)*cw,pt=(u,v)=>[t[4]+dx*u+px*v*sz,t[5]+dy*u+py*v*sz];
+          if(hit.cell([pt(u0,-.2),pt(u1,-.2),pt(u0,.8),pt(u1,.8)])>=.5)return true;
+        }else if([c-cw*.35,c,c+cw*.35].every(u=>hit(t[4]+dx*u+px*.3*sz,t[5]+dy*u+py*.3*sz)))return true;
       }
     }
     return false;
